@@ -30,7 +30,7 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     # 2. Inizializzazione Client
     client = genai.Client(api_key=api_key)
     
-    # 3. Preparazione Prompt
+    # 3. Preparazione Prompt (AGGIORNATO PER EVITARE CANI/GATTI)
     system_instruction = """
     Sei un Regista esperto di YouTube Shorts e TikTok.
     Il tuo compito è creare una SCALETTA DI PRODUZIONE VIDEO (Script + Visuals).
@@ -40,11 +40,17 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     2. Per ogni scena, scrivi il 'voiceover' (max 20 parole).
     3. Per ogni scena, fornisci una 'visual_keyword' IN INGLESE.
     
-    IMPORTANTE PER I VISUAL:
-    - NON usare parole singole generiche (es. NO "market", NO "office").
-    - USA frasi di ricerca descrittive di 2-3 parole specifiche per Pexels.
-    - Esempi corretti: "stock market chart", "man in suit looking at phone", "futuristic digital interface", "bitcoin falling coins".
+    REGOLA D'ORO PER I VISUAL (PER EVITARE ERRORI):
+    - Devi SEMPRE specificare il SOGGETTO UMANO se l'azione è umana.
+    - NON scrivere mai solo l'azione (es. NO "drinking water", NO "running").
+    - SCRIVI: "Soggetto + Azione + Contesto + Stile".
     
+    Esempi di correzione:
+    - Sbagliato: "drinking water" (Esce un cane) -> Corretto: "handsome man drinking water glass kitchen"
+    - Sbagliato: "stretching" -> Corretto: "girl yoga morning living room"
+    - Sbagliato: "writing" -> Corretto: "pov hand writing notebook desk close up"
+    - Sbagliato: "focus" -> Corretto: "man working laptop night office neon"
+
     OUTPUT: Restituisci SOLO un array JSON valido.
     """
     
@@ -53,7 +59,7 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     try:
         # 4. Chiamata API (MODIFICATO IL MODELLO QUI SOTTO)
         response = client.models.generate_content(
-            model="gemini-1.5-flash",  # <--- CAMBIATO DA 2.0 A 1.5 PER STABILITÀ
+            model="gemini-flash-latest",  # <--- CAMBIATO DA 2.0 A 1.5 PER STABILITÀ
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
