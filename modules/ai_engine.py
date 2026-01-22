@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 import os
+import traceback # <--- Nuovo import per vedere i dettagli dell'errore
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -17,54 +18,43 @@ class VideoScript(BaseModel):
     scenes: List[Scene]
 
 def generate_script(topic: str, vibe: str) -> List[dict]:
-    """
-    Genera lo script usando l'SDK Unificato google-genai con gestione errori Human-Friendly.
-    """
+    print(f"--- INIZIO GENERAZIONE SCRIPT ---", flush=True) # <--- Debug Forzato
     
-    # 1. Recupero API Key
+    # 1. Recupero API Key e DEBUG
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+    
+    # CONTROLLO SE LA CHIAVE ESISTE
     if not api_key:
-        # Errore interno (non colpa dell'utente), mostriamo un messaggio generico
-        st.error("⚠️ Servizio momentaneamente non disponibile (Configurazione mancante).")
+        print("❌ ERRORE CRITICO: API KEY è None o Vuota!", flush=True)
+        st.error("⚠️ Configurazione mancante: API Key non trovata.")
         return []
+    else:
+        # Stampiamo solo i primi 4 caratteri per sicurezza
+        print(f"✅ API Key trovata. Inizia con: {api_key[:4]}...", flush=True)
 
     # 2. Inizializzazione Client
     try:
         client = genai.Client(api_key=api_key)
-    except Exception:
+    except Exception as e:
+        print(f"❌ Errore Inizializzazione Client: {e}", flush=True)
         st.error("⚠️ Errore di connessione ai servizi AI.")
         return []
     
-    # 3. Preparazione Prompt (Versione Human-Centric)
+    # 3. Prompt
     system_instruction = """
-    You are an expert Video Director for YouTube Shorts and TikTok.
-    Your task is to create a VIDEO PRODUCTION PLAN (Script + Visuals).
-    
-    RULES:
-    1. Structure the video in 3-5 short scenes.
-    2. For each scene, write the 'voiceover' (max 20 words).
-    3. For each scene, provide a 'visual_keyword' in ENGLISH (for Pexels search).
-    
-    CRITICAL RULE FOR LANGUAGE:
-    - DETECT the language of the user's TOPIC.
-    - Write the 'voiceover' in the SAME LANGUAGE as the TOPIC.
-    - (Example: If topic is Italian -> Voiceover in Italian. If English -> English).
-    
-    CRITICAL RULE FOR VISUALS (ANTI-HALLUCINATION):
-    - ALWAYS specify the HUMAN SUBJECT if the action involves a person.
-    - NEVER write just the action.
-    - FORMAT: "Subject + Action + Context + Vibe".
-    - Example: "Young man drinking water kitchen morning light" (NOT just "drinking water").
-    
-    OUTPUT: Return ONLY valid JSON.
+    You are an expert Video Director. Create a plan with 3-5 scenes.
+    For visuals: describe the subject (e.g. 'Man drinking water') not just action.
+    OUTPUT: Valid JSON only.
     """
     
     user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}\nLENGTH: 30-60 seconds."
 
     try:
-        # 4. Chiamata API (Usiamo il modello stabile 1.5)
+        print("⏳ Invio richiesta a Google Gemini 1.5 Flash...", flush=True)
+        
+        # 4. Chiamata API
         response = client.models.generate_content(
-            model="gemini-flash-latest", 
+            model="gemini-1.5-flash",  # <--- MODELLO SICURO
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -74,37 +64,25 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
             )
         )
         
-        # 5. Parsing & Validazione
+        print("✅ Risposta ricevuta da Google!", flush=True)
+
+        # 5. Parsing
         if not response.text:
-            st.warning("🤔 L'AI non ha saputo rispondere a questo argomento. Prova a riformulare.")
+            print("⚠️ Risposta vuota dall'AI", flush=True)
             return []
 
-        try:
-            script_obj = VideoScript.model_validate_json(response.text)
-            return [scene.model_dump() for scene in script_obj.scenes]
-        except Exception:
-            st.warning("Format error. Riprova, a volte l'AI si confonde.")
-            return []
+        script_obj = VideoScript.model_validate_json(response.text)
+        return [scene.model_dump() for scene in script_obj.scenes]
 
-    # --- 🛡️ GESTIONE ERRORI "HUMAN FRIENDLY" ---
+    # --- CATTURA QUALSIASI ERRORE E STAMPALO ---
     except Exception as e:
-        error_msg = str(e)
+        print("\n\n🔥 ERRORE FATALE RILEVATO 🔥", flush=True)
+        print(f"TIPO ERRORE: {type(e).__name__}", flush=True)
+        print(f"MESSAGGIO: {str(e)}", flush=True)
+        print("TRACEBACK COMPLETO:", flush=True)
+        traceback.print_exc() # Stampa tutto l'albero dell'errore
+        print("----------------------------------\n", flush=True)
         
-        # Caso 1: Troppe richieste (429 Quota Exceeded)
-        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-             st.warning("🚦 Traffico intenso sui server AI! Siamo in Free Tier, attendi 30 secondi e riprova.")
-             # Non stampiamo nulla di tecnico a schermo
-             return []
-        
-        # Caso 2: Contenuto bloccato (Safety Filters)
-        elif "finish_reason" in error_msg and "SAFETY" in error_msg:
-            st.warning("🛡️ L'AI si è rifiutata di generare questo contenuto per motivi di sicurezza. Cambia argomento.")
-            return []
-            
-        # Caso 3: Errore generico (Internet, Server Down, ecc.)
-        else:
-            # Messaggio vago ma utile per l'utente
-            st.error("❌ Errore di comunicazione con il cervello digitale. Riprova tra poco.")
-            # Stampiamo l'errore vero SOLO nella console dello sviluppatore (invisibile all'utente)
-            print(f"DEBUG LOG (Hidden from user): {error_msg}")
-            return []
+        # Mostriamo l'errore a video solo se non è un segreto
+        st.error("❌ Errore tecnico. Controlla i logs nella dashboard.")
+        return []
