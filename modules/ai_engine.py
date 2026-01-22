@@ -6,7 +6,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-# --- DEFINIZIONE STRUTTURA DATI (PYDANTIC) ---
+# --- DEFINIZIONE STRUTTURA DATI ---
 class Scene(BaseModel):
     scene_number: int = Field(..., description="Numero progressivo della scena")
     voiceover: str = Field(..., description="Il testo che lo speaker deve dire (max 20 parole)")
@@ -18,19 +18,24 @@ class VideoScript(BaseModel):
 
 def generate_script(topic: str, vibe: str) -> List[dict]:
     """
-    Genera lo script usando l'SDK Unificato google-genai con gestione Type-Safe.
+    Genera lo script usando l'SDK Unificato google-genai con gestione errori Human-Friendly.
     """
     
     # 1. Recupero API Key
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
-        st.error("❌ Errore API Key: Manca la configurazione di Google.")
+        # Errore interno (non colpa dell'utente), mostriamo un messaggio generico
+        st.error("⚠️ Servizio momentaneamente non disponibile (Configurazione mancante).")
         return []
 
     # 2. Inizializzazione Client
-    client = genai.Client(api_key=api_key)
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception:
+        st.error("⚠️ Errore di connessione ai servizi AI.")
+        return []
     
-    # 3. Preparazione Prompt (AGGIORNATO PER EVITARE CANI/GATTI)
+    # 3. Preparazione Prompt (Versione Human-Centric)
     system_instruction = """
     Sei un Regista esperto di YouTube Shorts e TikTok.
     Il tuo compito è creare una SCALETTA DI PRODUZIONE VIDEO (Script + Visuals).
@@ -45,21 +50,15 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     - NON scrivere mai solo l'azione (es. NO "drinking water", NO "running").
     - SCRIVI: "Soggetto + Azione + Contesto + Stile".
     
-    Esempi di correzione:
-    - Sbagliato: "drinking water" (Esce un cane) -> Corretto: "handsome man drinking water glass kitchen"
-    - Sbagliato: "stretching" -> Corretto: "girl yoga morning living room"
-    - Sbagliato: "writing" -> Corretto: "pov hand writing notebook desk close up"
-    - Sbagliato: "focus" -> Corretto: "man working laptop night office neon"
-
     OUTPUT: Restituisci SOLO un array JSON valido.
     """
     
     user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}\nLUNGHEZZA: 30-60 secondi."
 
     try:
-        # 4. Chiamata API (MODIFICATO IL MODELLO QUI SOTTO)
+        # 4. Chiamata API (Usiamo il modello stabile 1.5)
         response = client.models.generate_content(
-            model="gemini-flash-latest",  # <--- CAMBIATO DA 2.0 A 1.5 PER STABILITÀ
+            model="gemini-1.5-flash", 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -69,26 +68,37 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
             )
         )
         
-        # 5. Parsing Type-Safe
+        # 5. Parsing & Validazione
         if not response.text:
-            st.error("L'AI ha restituito una risposta vuota.")
+            st.warning("🤔 L'AI non ha saputo rispondere a questo argomento. Prova a riformulare.")
             return []
 
         try:
             script_obj = VideoScript.model_validate_json(response.text)
             return [scene.model_dump() for scene in script_obj.scenes]
-        except Exception as e:
-            st.error(f"Errore nel formato JSON ricevuto: {e}")
+        except Exception:
+            st.warning("Format error. Riprova, a volte l'AI si confonde.")
             return []
 
-    # --- GESTIONE ERRORE SPECIFICA PER QUOTA (Migliorata) ---
+    # --- 🛡️ GESTIONE ERRORI "HUMAN FRIENDLY" ---
     except Exception as e:
         error_msg = str(e)
+        
+        # Caso 1: Troppe richieste (429 Quota Exceeded)
         if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-             st.warning("🚦 Traffico intenso sui server AI (Errore 429). Attendi 30 secondi e riprova.")
-             # Evita di mostrare tutto il JSON brutto all'utente
-             print(f"DEBUG ERROR: {error_msg}") 
+             st.warning("🚦 Traffico intenso sui server AI! Siamo in Free Tier, attendi 30 secondi e riprova.")
+             # Non stampiamo nulla di tecnico a schermo
              return []
+        
+        # Caso 2: Contenuto bloccato (Safety Filters)
+        elif "finish_reason" in error_msg and "SAFETY" in error_msg:
+            st.warning("🛡️ L'AI si è rifiutata di generare questo contenuto per motivi di sicurezza. Cambia argomento.")
+            return []
+            
+        # Caso 3: Errore generico (Internet, Server Down, ecc.)
         else:
-            st.error(f"Errore connessione AI: {e}")
+            # Messaggio vago ma utile per l'utente
+            st.error("❌ Errore di comunicazione con il cervello digitale. Riprova tra poco.")
+            # Stampiamo l'errore vero SOLO nella console dello sviluppatore (invisibile all'utente)
+            print(f"DEBUG LOG (Hidden from user): {error_msg}")
             return []

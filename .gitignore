@@ -10,4 +10,4 @@ env/
 .env
 secrets.toml
 *.log
-.docx
+*.docx
