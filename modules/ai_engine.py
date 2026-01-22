@@ -37,28 +37,34 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     
     # 3. Preparazione Prompt (Versione Human-Centric)
     system_instruction = """
-    Sei un Regista esperto di YouTube Shorts e TikTok.
-    Il tuo compito è creare una SCALETTA DI PRODUZIONE VIDEO (Script + Visuals).
+    You are an expert Video Director for YouTube Shorts and TikTok.
+    Your task is to create a VIDEO PRODUCTION PLAN (Script + Visuals).
     
-    Regole:
-    1. Struttura il video in 3-5 scene brevi.
-    2. Per ogni scena, scrivi il 'voiceover' (max 20 parole).
-    3. Per ogni scena, fornisci una 'visual_keyword' IN INGLESE.
+    RULES:
+    1. Structure the video in 3-5 short scenes.
+    2. For each scene, write the 'voiceover' (max 20 words).
+    3. For each scene, provide a 'visual_keyword' in ENGLISH (for Pexels search).
     
-    REGOLA D'ORO PER I VISUAL (PER EVITARE ERRORI):
-    - Devi SEMPRE specificare il SOGGETTO UMANO se l'azione è umana.
-    - NON scrivere mai solo l'azione (es. NO "drinking water", NO "running").
-    - SCRIVI: "Soggetto + Azione + Contesto + Stile".
+    CRITICAL RULE FOR LANGUAGE:
+    - DETECT the language of the user's TOPIC.
+    - Write the 'voiceover' in the SAME LANGUAGE as the TOPIC.
+    - (Example: If topic is Italian -> Voiceover in Italian. If English -> English).
     
-    OUTPUT: Restituisci SOLO un array JSON valido.
+    CRITICAL RULE FOR VISUALS (ANTI-HALLUCINATION):
+    - ALWAYS specify the HUMAN SUBJECT if the action involves a person.
+    - NEVER write just the action.
+    - FORMAT: "Subject + Action + Context + Vibe".
+    - Example: "Young man drinking water kitchen morning light" (NOT just "drinking water").
+    
+    OUTPUT: Return ONLY valid JSON.
     """
     
-    user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}\nLUNGHEZZA: 30-60 secondi."
+    user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}\nLENGTH: 30-60 seconds."
 
     try:
         # 4. Chiamata API (Usiamo il modello stabile 1.5)
         response = client.models.generate_content(
-            model="gemini-1.5-flash", 
+            model="gemini-2.5-flash-lite", 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,

@@ -8,7 +8,7 @@ from modules.utils import check_rate_limit, footer_legal
 # Carica variabili d'ambiente
 load_dotenv()
 
-# --- CONFIGURAZIONE PAGINA ---
+# --- PAGE CONFIGURATION (Wide layout for dashboard feel) ---
 st.set_page_config(
     page_title="TubeFlow AI | 2026 Edition",
     page_icon="⚡",
@@ -16,10 +16,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS INJECTION (DESIGN SYSTEM 2026) ---
+# --- CSS INJECTION (2026 DESIGN SYSTEM) ---
 st.markdown("""
     <style>
-    /* RESET E FONDO */
+    /* RESET & BACKGROUND */
     .stApp {
         background-color: #050505;
         background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #050505 60%);
@@ -50,7 +50,7 @@ st.markdown("""
         line-height: 1.6;
     }
     
-    /* BADGE FORMATO VIDEO */
+    /* BADGES */
     .format-badge {
         display: inline-block;
         background: rgba(255, 255, 255, 0.1);
@@ -62,10 +62,10 @@ st.markdown("""
         font-weight: 600;
         font-family: monospace;
         letter-spacing: 1px;
-        margin-top: 10px;
+        margin: 5px;
     }
 
-    /* INPUT FORM STYLING (GLASSMORPHISM) */
+    /* INPUT FORM (GLASSMORPHISM) */
     div[data-testid="stForm"] {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -76,7 +76,7 @@ st.markdown("""
         -webkit-backdrop-filter: blur( 4px );
     }
 
-    /* INPUT FIELDS */
+    /* INPUT FIELDS STYLING */
     .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         background-color: #0a0a0a !important;
         color: white !important;
@@ -88,7 +88,7 @@ st.markdown("""
         color: white !important;
     }
     
-    /* BOTTONE "GENERA" NEON */
+    /* NEON BUTTON */
     .stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
@@ -108,7 +108,7 @@ st.markdown("""
         box-shadow: 0 0 20px rgba(0, 201, 255, 0.5);
     }
 
-    /* CARD SCENA (OUTPUT) */
+    /* SCENE CARD STYLING */
     .scene-card {
         background: rgba(20, 20, 20, 0.6);
         border-left: 4px solid #00f2ea;
@@ -120,13 +120,13 @@ st.markdown("""
         border-bottom: 1px solid #222;
     }
     
-    /* MODIFICA PER IL MENU A TENDINA (Per leggere tutto il testo) */
+    /* POPOVER MENU FIX */
     div[data-baseweb="popover"] {
         background-color: #111 !important;
         border: 1px solid #333;
     }
     
-    /* LINK PERSONALIZZATI */
+    /* CUSTOM LINKS */
     a.download-btn {
         display: inline-block;
         background-color: #222;
@@ -137,6 +137,7 @@ st.markdown("""
         font-weight: bold;
         border: 1px solid #444;
         margin-top: 10px;
+        font-size: 0.8rem;
     }
     a.download-btn:hover {
         background-color: #fff;
@@ -144,7 +145,7 @@ st.markdown("""
         border-color: #fff;
     }
     
-    /* NASCONDI ELEMENTI STANDARD */
+    /* HIDE STANDARD ELEMENTS */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -152,53 +153,54 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def main():
-    # --- HERO SECTION (Presentazione + Formato) ---
+    # --- HERO SECTION (ENGLISH) ---
     st.markdown("""
         <div class="hero-container">
             <div class="hero-title">TUBEFLOW AI</div>
             <div class="hero-subtitle">
-                Il tuo assistente di regia automatizzato.<br>
-                Trasforma idee in piani di montaggio completi con video stock reali.
+                Your Automated Video Director.<br>
+                Turn ideas into production-ready plans with real stock footage.
             </div>
-            <div class="format-badge">📱 FORMATO: 9:16 VERTICALE (SHORTS/TIKTOK)</div>
-            <div class="format-badge">⚡ ASSET: FREE COPYRIGHT (PEXELS)</div>
+            <div class="format-badge">📱 FORMAT: 9:16 VERTICAL (SHORTS/TIKTOK)</div>
+            <div class="format-badge">⚡ ASSETS: ROYALTY FREE (PEXELS)</div>
         </div>
     """, unsafe_allow_html=True)
 
     # --- INPUT AREA (GLASS CARD) ---
     with st.form("input_form"):
-        # HO CAMBIATO LE PROPORZIONI QUI: [2, 1] invece di [3, 1]
-        # Ora la colonna di destra è più larga e il testo si legge.
+        # Layout [2, 1] per dare spazio al testo
         c1, c2 = st.columns([2, 1]) 
         
         with c1:
-            st.markdown("**1. LA TUA IDEA**")
-            topic = st.text_area("Di cosa vuoi parlare?", placeholder="Es. 5 abitudini per essere più produttivi al mattino...", height=100, label_visibility="collapsed")
+            st.markdown("**1. YOUR VIDEO IDEA**")
+            topic = st.text_area("What is the video about?", placeholder="Ex. 5 habits to be more productive in the morning...", height=100, label_visibility="collapsed")
         
         with c2:
-            st.markdown("**2. IL VIBE (ATMOSFERA)**")
-            vibe = st.selectbox("Seleziona Stile", ["TikTok Frenetico", "Documentario Dark", "Luxury Life", "Coding/Tech"], label_visibility="collapsed")
+            st.markdown("**2. THE VIBE**")
+            # Opzioni in Inglese per l'utenza internazionale
+            vibe = st.selectbox("Select Style", ["Fast Paced (TikTok)", "Dark Documentary", "Luxury/Business", "Coding/Tech", "Calm/Minimalist"], label_visibility="collapsed")
             
-        submitted = st.form_submit_button("⚡ GENERA PROGETTO")
+        submitted = st.form_submit_button("⚡ GENERATE PLAN")
 
     # --- OUTPUT AREA ---
     if submitted and topic:
         check_rate_limit()
         
-        with st.status("🔮 Neural Network Processing...", expanded=True) as status:
-            st.write("🧠 Gemini 2.0: Writing Script...")
+        # Status Bar in Inglese
+        with st.status("🔮 AI Director is working...", expanded=True) as status:
+            st.write("🧠 Gemini Flash Latest: Writing Script (Auto-Language Detect)...") 
             script_data = generate_script(topic, vibe)
             
             if not script_data:
-                status.update(label="❌ System Failure.", state="error")
+                status.update(label="❌ System Failure. Please try again.", state="error")
                 return
             
-            st.write("📡 Pexels API: Fetching Vertical Videos...")
+            st.write("📡 Pexels API: Finding best vertical videos...")
             final_plan = []
             
             for scene in script_data:
                 keyword = scene.get('keyword', '')
-                vid_prev, vid_link, author, author_url = get_pexels_video(keyword)
+                vid_prev, vid_link, author, author_url = get_pexels_video(keyword, vibe)
                 
                 scene['video_preview'] = vid_prev
                 scene['video_link'] = vid_link
@@ -208,9 +210,9 @@ def main():
             
             status.update(label="✅ READY TO DEPLOY", state="complete")
 
-        st.write("") 
+        st.write("") # Spacer
 
-        # --- VISUALIZZAZIONE A CARDS ---
+        # --- CARDS VISUALIZZAZIONE ---
         st.markdown("### 📂 PROJECT FILES")
         
         for idx, scene in enumerate(final_plan):
@@ -224,26 +226,25 @@ def main():
                         <div style="color: #666; font-size: 0.8rem; margin-bottom: 5px;">SCENE {idx+1} • {duration}s</div>
                         <div style="font-size: 1.1rem; color: #fff; font-weight: 600; margin-bottom: 10px;">"{scene.get('voiceover')}"</div>
                         <div style="font-family: monospace; color: #00f2ea; background: rgba(0, 242, 234, 0.1); padding: 4px 8px; border-radius: 4px; display: inline-block;">
-                            KEYWORD: {scene.get('keyword')}
+                            SEARCH QUERY: {scene.get('keyword')}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
                 with c_vid:
                     if scene.get('video_preview'):
-                        # Il video viene visualizzato
                         st.video(scene['video_preview'])
                         
                         st.markdown(f"""
                             <div style="text-align: right; margin-top: -10px;">
-                                <a href="{scene['video_link']}" target="_blank" class="download-btn">⬇ SCARICA HD (9:16)</a>
+                                <a href="{scene['video_link']}" target="_blank" class="download-btn">⬇ DOWNLOAD HD</a>
                                 <div style="margin-top: 8px; font-size: 0.7rem; color: #555;">
                                     🎥 By <a href="{scene['author_url']}" style="color: #777; text-decoration: none;">{scene['author']}</a>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
                     else:
-                        st.warning("No signal from Pexels.")
+                        st.warning("No footage found on Pexels.")
                 
                 st.write("---") 
 
