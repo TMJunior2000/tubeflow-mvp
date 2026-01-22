@@ -64,7 +64,7 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     try:
         # 4. Chiamata API (Usiamo il modello stabile 1.5)
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", 
+            model="gemini-flash-latest", 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
