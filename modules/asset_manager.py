@@ -112,3 +112,42 @@ def get_contextual_music(query: str):
     # Se arriviamo qui, l'API ha fallito tutte le query. Usiamo il salvagente.
     print("🚨 MUSIC FALLBACK ACTIVATED: Using safe MP3.")
     return "Fallback Music", SAFE_FALLBACK_MP3
+
+def get_pixabay_audio(genre: str, mood: str):
+    """
+    Cerca musica usando i TAG tecnici di Pixabay.
+    URL Pattern: https://pixabay.com/api/audio/?key=...&category=genre&q=mood
+    """
+    _, pix_key = get_api_keys()
+    
+    # URL DI SICUREZZA (Se tutto fallisce, scarica questo)
+    FALLBACK_MP3 = "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" 
+
+    if not pix_key:
+        print("⚠️ No Pixabay Key.")
+        return None, FALLBACK_MP3
+
+    # Costruzione Query Tecnica
+    # Nota: Pixabay usa 'category' per i generi broad come 'ambient' o 'music'
+    # e 'q' per raffinare come 'contemplative'.
+    url = f"https://pixabay.com/api/audio/?key={pix_key}&category=music&q={genre}+{mood}&per_page=3"
+    
+    print(f"🎵 DEBUG API URL: {url}") # <--- Controlla questo nel log!
+
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if int(data.get("totalHits", 0)) > 0:
+                track = random.choice(data["hits"])
+                # Pixabay restituisce 'url' per il file CDN diretto
+                return track.get("pageURL"), track.get("url")
+            else:
+                print(f"⚠️ 0 Results for Genre: {genre}, Mood: {mood}")
+        else:
+             print(f"⚠️ API Error: {r.status_code}")
+             
+    except Exception as e:
+        print(f"⚠️ Exception Music: {e}")
+
+    return "Fallback Music", FALLBACK_MP3

@@ -4,7 +4,7 @@ import time
 # Import Moduli
 # Assicurati che i file in 'modules/' siano aggiornati con le versioni mandate prima!
 from modules.ai_engine import generate_script
-from modules.asset_manager import get_hybrid_video, get_contextual_music
+from modules.asset_manager import get_hybrid_video, get_pixabay_audio
 from modules.audio_engine import generate_voiceover_file
 from modules.exporter import create_smart_package
 
@@ -179,26 +179,26 @@ def main():
             voice_path = None
             
             if use_music:
-                st.markdown("---") # Separatore visivo
-                st.write(f"🎵 **DEBUG MUSICA:** Cerco '{audio_settings['music_query']}'...")
+                # Estraiamo i tag decisi dall'AI
+                genre = audio_settings.get('pixabay_genre', 'ambient')
+                mood = audio_settings.get('pixabay_mood', 'contemplative')
                 
-                # Chiamata all'Asset Manager
+                st.write(f"🎵 Pixabay Query: `Genre={genre}` + `Mood={mood}`")
+                
+                # Chiamata alla nuova funzione
                 try:
-                    music_res = get_contextual_music(audio_settings['music_query'])
+                    music_res = get_pixabay_audio(genre, mood)
                     
                     if music_res and music_res[1]:
                         music_url = music_res[1]
-                        st.success(f"✅ Trovato: `{music_url}`") # Mostra il link a schermo!
+                        st.success(f"✅ Track Found: [Listen Preview]({music_url})")
                     else:
-                        st.error("❌ Asset Manager ha restituito None/Vuoto.")
-                        # FORZATURA DI EMERGENZA (Hardcoded Fallback)
-                        music_url = "https://cdn.pixabay.com/download/audio/2022/03/24/audio_1969a58943.mp3"
-                        st.warning(f"⚠️ Uso Link di Emergenza: `{music_url}`")
+                        st.error("❌ Errore critico nel recupero musica.")
                 except Exception as e:
-                    st.error(f"❌ Errore Python durante la ricerca musica: {e}")
+                    st.error(f"❌ Errore Python: {e}")
             
             if use_voice:
-                st.write("🎙️ Synthesizing Neural Voice...")
+                st.write(f"🎙️ Recording (Speed: {audio_settings['voice_speed']})...")
                 voice_path = generate_voiceover_file(full_text, voice_id, audio_settings['voice_speed'])
 
             # STEP 4: Packaging
