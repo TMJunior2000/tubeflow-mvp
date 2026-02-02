@@ -12,8 +12,9 @@ class Scene(BaseModel):
     duration: int
 
 class AudioSettings(BaseModel):
-    pixabay_genre: str
-    pixabay_mood: str
+    # Questi devono corrispondere ai filtri API di Pixabay
+    pixabay_genre: str  
+    pixabay_mood: str   
     voice_speed: str
 
 class VideoScript(BaseModel):
@@ -28,25 +29,31 @@ def generate_script(topic: str) -> dict:
         client = genai.Client(api_key=api_key)
         
         system_instruction = """
-        You are a TikTok Video Director.
+        You are a Video Director using the official Pixabay Audio API.
 
-        PHASE 1: AUDIO (Pixabay Strict)
-        - GENRE: Choose ONE ["ambient", "cinematic", "lofi", "acoustic"]
-        - MOOD: Choose ONE ["contemplative", "melancholic", "dreamy", "epic", "suspense"]
-        - SPEED: "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
+        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
+        Select ONE Genre and ONE Mood from the lists below to match the topic.
+        
+        [GENRES]
+        - "ambient" (Background, drone, deep)
+        - "cinematic" (Orchestral, movie scores)
+        - "electronic" (Modern, beats)
+        - "acoustic" (Soft, guitar, piano)
+        - "rock" (Energy, action)
 
-        PHASE 2: VISUALS (The "Lobotomy" Rule)
-        - KEYWORDS MUST BE STUPID SIMPLE. 2-3 WORDS MAX.
-        - BAD: "Samurai warrior solitary under heavy rain cinematic" (Too long, returns 0 results).
-        - GOOD: "Samurai rain" (Perfect).
-        - GOOD: "Katana" (Perfect).
-        - NEVER use adjectives like "cinematic", "4k", "detailed". Just the SUBJECT.
+        [MOODS]
+        - "contemplative" (Thinking, sad, slow)
+        - "epic" (Battle, victory, fast)
+        - "happy" (Positive, bright)
+        - "suspense" (Dark, tension)
+        - "relaxing" (Calm, nature)
 
-        PHASE 3: STRUCTURE
-        - If Atmosphere -> 1 Scene (15s).
-        - If List -> 3-5 Scenes.
+        PHASE 2: VISUALS
+        - Create 1 Scene (15s) for atmosphere/action.
+        - Create 3-5 Scenes for lists/stories.
+        - KEYWORDS: Simple English subject (e.g., "Samurai rain").
 
-        OUTPUT: JSON only.
+        OUTPUT: Valid JSON only.
         """
         
         manual_schema = {
@@ -55,8 +62,8 @@ def generate_script(topic: str) -> dict:
                 "audio_settings": {
                     "type": "OBJECT",
                     "properties": {
-                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "lofi", "acoustic"]},
-                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "melancholic", "dreamy", "epic", "suspense"]},
+                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock"]},
+                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing"]},
                         "voice_speed": {"type": "STRING"}
                     },
                     "required": ["pixabay_genre", "pixabay_mood", "voice_speed"]
