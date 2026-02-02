@@ -86,28 +86,42 @@ def get_hybrid_video(keyword: str, vibe: str, orientation: str):
 # 🎵 SEZIONE AUDIO (API Ufficiale)
 # ==========================================
 def get_pixabay_audio(genre: str, mood: str):
+    """
+    Restituisce (PageURL, Mp3URL) se ha successo.
+    Restituisce (None, MESSAGGIO_ERRORE) se fallisce.
+    """
     _, pix_key = get_api_keys()
-    if not pix_key: return None, None
+    
+    if not pix_key:
+        return None, "ERRORE: API Key mancante nei secrets/env."
 
-    # Esempio: https://pixabay.com/api/audio/?key=...&q=cinematic+epic
-    url = f"https://pixabay.com/api/audio/?key={pix_key}&q={genre}+{mood}&per_page=5"
-    print(f"🎵 API CALL: {url}")
-
+    # Costruzione URL
+    url = f"https://pixabay.com/api/audio/?key={pix_key}&q={genre}+{mood}&per_page=10"
+    
     try:
         r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            hits = data.get("hits", [])
-            if len(hits) > 0:
-                track = random.choice(hits)
-                # 'url' è il CDN link
+        
+        # CASO 1: Errore HTTP (es. 401 Unauthorized, 429 Rate Limit)
+        if r.status_code != 200:
+            return None, f"HTTP ERROR {r.status_code}: {r.text}"
+
+        data = r.json()
+        hits = data.get("hits", [])
+        
+        # CASO 2: Zero Risultati
+        if len(hits) == 0:
+            # Tentativo disperato solo col mood
+            r2 = requests.get(f"https://pixabay.com/api/audio/?key={pix_key}&q={mood}", timeout=10)
+            if r2.status_code == 200 and r2.json().get("hits"):
+                track = random.choice(r2.json()["hits"])
                 return track.get("pageURL"), track.get("url")
             else:
-                # Retry solo Mood
-                r2 = requests.get(f"https://pixabay.com/api/audio/?key={pix_key}&q={mood}", timeout=10)
-                if r2.status_code == 200 and r2.json().get("hits"):
-                    track = random.choice(r2.json()["hits"])
-                    return track.get("pageURL"), track.get("url")
-    except: pass
+                return None, f"NESSUN RISULTATO trovato per '{genre} + {mood}' (nemmeno al retry)."
 
-    return None, None
+        # CASO 3: Successo
+        track = random.choice(hits)
+        return track.get("pageURL"), track.get("url")
+
+    except Exception as e:
+        # CASO 4: Errore Python (es. niente internet)
+        return None, f"EXCEPTION: {str(e)}"

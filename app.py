@@ -109,15 +109,22 @@ def main():
 
             if use_music:
                 st.write(f"🎵 Searching Pixabay Audio: Genre '{genre}' Mood '{mood}'...")
-                # Chiamiamo la funzione corretta in asset_manager
-                music_res = get_pixabay_audio(genre, mood)
                 
-                if music_res and music_res[1]:
-                    music_url = music_res[1]
+                # Chiamata alla funzione aggiornata
+                page_link, result = get_pixabay_audio(genre, mood)
+                
+                if page_link:
+                    # SUCCESSO: result è il link MP3
+                    music_url = result
                     st.success(f"✅ Track Found: [Listen]({music_url})")
                 else:
-                    st.warning("⚠️ Music API limit or empty. Using fallback.")
-                    music_url = "https://cdn.pixabay.com/download/audio/2022/03/24/audio_1969a58943.mp3"
+                    # ERRORE: result è il messaggio di errore testuale
+                    error_msg = result
+                    st.error(f"❌ PIXABAY ERROR: {error_msg}")
+                    
+                    # Fallback visibile
+                    st.warning("⚠️ Uso traccia di emergenza (Wikimedia) per permettere il download.")
+                    music_url = "https://upload.wikimedia.org/wikipedia/commons/e/e7/Impact_Moderato_-_Kevin_MacLeod.mp3"
 
             if use_voice:
                 st.write(f"🎙️ Recording (Speed: {speed})...")
