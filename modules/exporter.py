@@ -2,13 +2,20 @@ import zipfile
 from io import BytesIO
 import requests
 import os
+import streamlit as st
+
+def get_request_headers():
+    """Si traveste da Browser per evitare blocchi 403 da Pexels/Pixabay"""
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Referer": "https://www.google.com/"
+    }
 
 def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voice_path=None, fps=30):
     """
     Genera FCPXML 1.8 includendo Video, Musica e Voiceover.
     """
     total_duration = sum(s['duration'] for s in scenes)
-    total_frames = total_duration * fps
     
     # Setup Risoluzione
     if orientation == "portrait":
@@ -24,11 +31,7 @@ def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voi
         <format id="r1" name="FFVideoFormat{height}p{fps}" frameDuration="1/{fps}s" width="{width}" height="{height}" colorSpace="1-1-1 (Rec. 709)"/>
 """
     # --- 1. DEFINIZIONE RISORSE (ASSETS) ---
-    # Gli ID r1 è il formato. Usiamo r2, r3... per i file.
     resource_id_counter = 2
-    
-    # Risorse Video (Non servono asset espliciti per la spine di base in FCPXML 1.8 semplice, 
-    # ma per l'audio servono per forza).
     
     music_res_id = None
     if music_path:
@@ -57,15 +60,12 @@ def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voi
         filename = f"{i+1:02d}_{safe_keyword}.mp4"
         dur = scene['duration']
         
-        # Aggiungiamo il clip video
         xml += f"""
                         <clip name="{filename}" offset="{offset}s" duration="{dur}s" start="0s">
                             <note>{scene['voiceover']}</note>
                             <video offset="0s" ref="r1" duration="{dur}s" start="0s"/>
 """
-        
         # --- 3. AGGANCIO AUDIO (CONNECTED CLIPS) ---
-        # Colleghiamo l'audio SOLO alla prima clip video (start=0) e lo facciamo durare tutto il video
         if i == 0:
             # Voiceover (Priorità alta)
             if voice_res_id:
@@ -81,10 +81,9 @@ def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voi
                                 <audio offset="0s" ref="{music_res_id}" duration="{total_duration}s" start="0s" role="music"/>
                             </clip>"""
 
-        xml += "                        </clip>" # Chiusura clip video
+        xml += "                        </clip>"
         offset += dur
 
-    # Footer XML
     xml += """
                     </spine>
                 </sequence>
@@ -97,51 +96,66 @@ def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voi
 
 def create_smart_package(scenes, orientation, music_url=None, voiceover_path=None):
     """
-    Crea lo ZIP finale e chiama il generatore XML aggiornato.
+    Crea ZIP robusto con gestione errori e User-Agent.
     """
     zip_buffer = BytesIO()
 
-    # Variabili per tracciare se i file esistono davvero
+    # Variabili di stato
     final_music_path = None
     final_voice_path = None
 
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
         
-        # 1. Video Assets
+        # --- 1. VIDEO ASSETS ---
         for i, scene in enumerate(scenes):
-            if scene.get('download'): # Usa 'download' da asset_manager
+            # FIX CRUCIALE: Cerca sia 'video_link' (app.py) che 'download' (asset_manager)
+            download_link = scene.get('video_link') or scene.get('download')
+            
+            if download_link:
                 try:
-                    vid_content = requests.get(scene['download'], timeout=15).content
-                    safe_key = "".join(c for c in scene['keyword'] if c.isalnum() or c in (' ','_')).replace(' ','_')
-                    zip_file.writestr(f"Assets/{i+1:02d}_{safe_key}.mp4", vid_content)
-                except:
-                    zip_file.writestr(f"Assets/ERROR_SCENE_{i+1}.txt", "Download failed")
+                    # SCARICAMENTO CON HEADERS (Anti-Blocco)
+                    response = requests.get(download_link, headers=get_request_headers(), timeout=30, stream=True)
+                    
+                    if response.status_code == 200:
+                        safe_key = "".join(c for c in scene['keyword'] if c.isalnum() or c in (' ','_')).replace(' ','_')
+                        filename = f"Assets/{i+1:02d}_{safe_key}.mp4"
+                        zip_file.writestr(filename, response.content)
+                        print(f"✅ Video {i+1} scaricato.")
+                    else:
+                        print(f"❌ Errore Video {i+1}: Status {response.status_code}")
+                        zip_file.writestr(f"Assets/ERROR_VIDEO_{i+1}_STATUS_{response.status_code}.txt", download_link)
+                except Exception as e:
+                    print(f"❌ Eccezione Video {i+1}: {e}")
+                    zip_file.writestr(f"Assets/ERROR_VIDEO_{i+1}.txt", str(e))
+            else:
+                zip_file.writestr(f"Assets/MISSING_LINK_{i+1}.txt", "Nessun link trovato nel JSON")
 
-        # 2. Musica (Download e salvataggio)
+        # --- 2. MUSIC ASSET ---
         if music_url:
             try:
-                # Se è una tupla (page, mp3), prendi il secondo elemento
-                if isinstance(music_url, tuple):
-                    real_mp3_url = music_url[1]
-                else:
-                    real_mp3_url = music_url
+                # Gestione tupla/stringa
+                real_url = music_url[1] if isinstance(music_url, tuple) else music_url
+                
+                if real_url:
+                    m_resp = requests.get(real_url, headers=get_request_headers(), timeout=30)
+                    if m_resp.status_code == 200:
+                        zip_file.writestr("Assets/Background_Music.mp3", m_resp.content)
+                        final_music_path = "Assets/Background_Music.mp3"
+                        print("✅ Musica scaricata.")
+                    else:
+                        print(f"❌ Errore Musica: {m_resp.status_code}")
+            except Exception as e:
+                print(f"❌ Eccezione Musica: {e}")
 
-                if real_mp3_url:
-                    music_content = requests.get(real_mp3_url, timeout=15).content
-                    zip_file.writestr("Assets/Background_Music.mp3", music_content)
-                    final_music_path = "Assets/Background_Music.mp3" # Segnale che esiste
-            except Exception as e: 
-                print(f"Music Download Error: {e}")
-
-        # 3. Voiceover (Lettura da file locale e salvataggio)
+        # --- 3. VOICEOVER ASSET ---
         if voiceover_path and os.path.exists(voiceover_path):
             with open(voiceover_path, "rb") as f:
-                zip_file.writestr("Assets/Voiceover.mp3", f.read())
-            final_voice_path = "Assets/Voiceover.mp3" # Segnale che esiste
+                content = f.read()
+                zip_file.writestr("Assets/Voiceover.mp3", content)
+                final_voice_path = "Assets/Voiceover.mp3"
+                print("✅ Voiceover archiviato.")
 
-        # 4. XML Generator (Passiamo i path confermati)
-        # Nota: L'XML si aspetta di trovare i file relativi a se stesso.
-        # Se l'XML è nella root e i file in Assets/, i path sono corretti.
+        # --- 4. XML ---
         xml_content = generate_davinci_xml(
             "TubeFlow_Project", 
             scenes, 
@@ -149,12 +163,10 @@ def create_smart_package(scenes, orientation, music_url=None, voiceover_path=Non
             music_path=final_music_path, 
             voice_path=final_voice_path
         )
-        
         zip_file.writestr(f"Project_{orientation}.fcpxml", xml_content)
 
-        # 5. Script Text
-        script_text = "\n".join([f"SCENE {s['scene_number']}: {s['voiceover']}" for s in scenes])
+        # 5. Script
+        script_text = "\n".join([f"SCENE {s['scene_number']} ({s['keyword']}): {s['voiceover']}" for s in scenes])
         zip_file.writestr("Script.txt", script_text)
-        zip_file.writestr("README.txt", f"Format: {orientation.upper()}\nImport the .fcpxml file into DaVinci Resolve.\nEnsure the 'Assets' folder is in the same directory as the XML.")
 
     return zip_buffer.getvalue()

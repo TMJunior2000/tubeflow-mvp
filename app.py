@@ -118,11 +118,12 @@ def main():
 
             if use_music:
                 st.write("🎵 Finding Music...")
-                # Attenzione qui: get_background_music ritorna (page_url, mp3_url)
-                # Dobbiamo passare l'intera tupla o estrarre l'mp3
-                music_data = get_background_music(vibe) 
+                music_data = get_background_music(vibe)
+                # IMPORTANTE: music_data è una tupla (page, mp3).
+                # Non serve scompattarla qui se 'create_smart_package' la gestisce,
+                # MA per sicurezza passiamo direttamente il link mp3.
                 if music_data:
-                    music_url = music_data[1] # Prendiamo solo il link diretto all'MP3
+                     music_url = music_data[1]  # <--- Assicurati che sia così o passa 'music_data' intero
 
             if use_voice and voice_id:
                 st.write("🎙️ Recording Voiceover...")
