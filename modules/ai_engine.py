@@ -68,7 +68,7 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
         }
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash", 
+            model="gemini-flash-latest", 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
