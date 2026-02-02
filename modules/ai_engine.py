@@ -27,8 +27,10 @@ def generate_script(topic: str) -> dict:
         return None
 
     try:
+        # v1alpha configuration for Gemini 3 capabilities
         client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
         
+        # Rigid schema to prevent validation errors (decimals/missing keys)
         target_schema = {
             "type": "OBJECT",
             "properties": {
@@ -54,34 +56,36 @@ def generate_script(topic: str) -> dict:
             "required": ["voice_settings", "scenes"]
         }
 
-        # --- IL PROMPT DEFINITIVO (Basato su Documentazione API) ---
+        # --- UNIVERSAL ARCHITECT PROMPT (PEXELS/PIXABAY OPTIMIZED) ---
         system_instruction = """
-        Sei TubeFlow v3, un Curatore esperto di Stock Footage ottimizzato per le API di Pexels e Pixabay.
-        Il tuo compito è generare query di ricerca che sfruttino i parametri nativi di questi database.
+        You are TubeFlow v3, an expert Stock Footage Curator optimized for Pexels and Pixabay API endpoints.
+        Your goal is to generate search queries that leverage the native parameters of these databases.
 
-        --- REGOLE DI RICERCA API (PEXELS & PIXABAY) ---
-        - TRADUZIONE FISICA: I database sono testuali. Converti concetti astratti in OGGETTI REALI.
-            * Esempio: "Disciplina" -> "Man waking up early" o "Cold water splash face".
-        - KEYWORD FORMAT: [Soggetto] + [Ambiente] + [Stile]. Solo INGLESE (max 4 parole).
-        - CATEGORIE API PIXABAY: Se pertinente, orienta la ricerca verso categorie supportate: 
+        --- API SEARCH RULES (PEXELS & PIXABAY) ---
+        - PHYSICAL TRANSLATION: Databases are text-based. Convert abstract concepts into PHYSICAL OBJECTS.
+            * Example: "Discipline" -> "Man waking up early" or "Cold water splash face".
+        - KEYWORD FORMAT: [Subject] + [Environment] + [Aesthetic Tag]. Use ENGLISH only (max 4 words).
+        - PIXABAY CATEGORIES: When relevant, align searches with supported categories: 
           (nature, science, education, feelings, health, people, religion, places, animals, industry, computer, food, sports, transportation, travel, buildings, business, music).
-        - TAG QUALITÀ: Includi sempre tag tecnici come '4k', 'Cinematic', 'Slow motion', 'Macro', o 'Drone'.
+        - QUALITY TAGS: Always include technical tags like '4k', 'Cinematic', 'Slow motion', 'Macro', or 'Drone'.
+        - LATERAL ASSOCIATION: Avoid generic stock looks. Use "Moody", "Minimalist", or "Grainy" to match 2026 aesthetics.
 
-        --- STRATEGIA DI MONTAGGIO (META 2026) ---
-        - DURATA: Ogni scena DEVE avere una durata tra 2 e 4 secondi per massimizzare la retention (Dopamina).
-        - NUMERO CLIP: Se l'utente specifica un numero (es. 7 clip), genera ESATTAMENTE quel numero di scene.
-        - HOOK: La Scena 1 deve essere un impatto visivo estremo (es. "Extreme close up" o "Explosion").
+        --- EDITING STRATEGY (2026 META-GAME) ---
+        - DURATION: Each scene MUST have a duration between 2 and 4 seconds to maximize retention (Dopamine Pacing).
+        - CLIP COUNT: Strictly follow the user's requested number of clips (e.g., if they ask for 7 clips, generate exactly 7 scenes).
+        - THE HOOK: Scene 1 MUST be a high-impact visual hook (e.g., "Extreme close up" or "Macro").
+        - NO DECIMALS: All durations must be INTEGERS.
 
-        --- LOGICA AUDIO ---
-        - Voiceover incalzante per adattarsi ai tagli rapidi.
-        - Velocità: +10% per contenuti dinamici, -10% per contenuti profondi/noir.
+        --- AUDIO & VOICE LOGIC ---
+        - Punchy voiceover lines to match fast cuts.
+        - Speed: +10% for dynamic/finance content, -10% for deep/noir/moody content.
 
-        MANDATORIO: Restituisci SOLO un oggetto JSON pulito. Nessun decimale nelle durate.
+        MANDATORY: Return ONLY a clean JSON object. No markdown, no explanations.
         """
 
         response = client.models.generate_content(
             model="gemini-3-flash-preview", 
-            contents=f"RICHIESTA UTENTE: {topic}. Ricorda: Tagli veloci (2-4s), usa keyword inglesi ottimizzate per API.",
+            contents=f"USER REQUEST: {topic}. REMEMBER: Fast cuts (2-4s), use English keywords optimized for stock APIs.",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
