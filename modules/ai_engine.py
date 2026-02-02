@@ -27,10 +27,8 @@ def generate_script(topic: str) -> dict:
         return None
 
     try:
-        # Client v1alpha per Gemini 3
         client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
         
-        # Schema strutturale rigido per evitare i 23 errori di validazione
         target_schema = {
             "type": "OBJECT",
             "properties": {
@@ -56,36 +54,33 @@ def generate_script(topic: str) -> dict:
             "required": ["voice_settings", "scenes"]
         }
 
-        # --- IL TUO PROMPT META 2026 (Expert Edition) ---
+        # --- IL PROMPT OTTIMIZZATO PER I DATABASE STOCK ---
         system_instruction = """
-        You are TubeFlow v3 "Expert Edition", a specialist in the 2026 viral content meta-game.
-        Your goal is to create "Faceless" videos that don't look like generic stock, optimizing for retention and dopamine loops.
+        You are TubeFlow v3, a professional Video Editor specialized in Pexels and Pixabay database indexing.
+        Your goal is to generate keywords that ALWAYS return high-quality results.
 
         ---------------------------------------------------------
-        RULE 1: SNIPER SEARCH & 2026 AESTHETICS (PEXELS/PIXABAY)
-        - LATERAL ASSOCIATIONS: Avoid literal/didactic queries. 
-             * Instead of "Sadness", use "Rain on window dark" or "Single dead leaf".
-             * Instead of "Success", use "Luxury car detail" or "Minimalist office view".
-        - "IMPERFECT VINTAGE" AESTHETIC: For every scene, add aesthetic tags like "Moody", "Cinematic", "Grainy", "Slow shutter", or "Minimalist".
-        - VISUAL COHERENCE: Maintain a consistent color thread across scenes (e.g., all cold tones or all warm tones).
-
-        RULE 2: THE DOPAMINE WORKFLOW (HOOK & CUTS)
-        - THE HOOK (First 2s): The first scene MUST have extreme visual impact. Use keywords like "Macro", "Slow motion", "Explosion", "Extreme close up".
-        - PACING: If the script is informative, use cuts every 2-3 seconds to maintain high dopamine (Multi-Clip Strategy). Use ONLY INTEGERS for duration.
-        - PAUSES: If the script is cinematic/reflective, use long clips with fluid camera movements (Slow Shutter).
-
-        RULE 3: HIGH-RPM NICHES (FEBRUARY 2026)
-        Adapt the script and visuals if you detect these niches:
-        - AI STORIES/CRIME: Dark visuals, shadows, noir atmospheres, fog.
-        - FINANCE/MINIMALISM: "Clean" visuals, geometric lines, modern architecture, quiet luxury.
-        - SILENT VLOG/ASMR: Natural visuals, macro details, textures.
-
-        RULE 4: AUDIO STRATEGY (SFX FOCUS)
-        - The script must implicitly suggest environmental sounds. 
-        - Voice Speed: -10% for noir/moody stories, +10% for facts/finance.
+        RULE 1: PEXELS/PIXABAY SNIPER ENGINE (MANDATORY)
+        - KEYWORD STRUCTURE: [Subject] + [Action/Environment] + [Aesthetic].
+        - NO ABSTRACT NOUNS: Never search for "Trust", "Innovation", "Motivation", or "Hate". These databases will fail.
+        - PHYSICAL SUBSTITUTION (Sniperizing):
+            * Instead of "Growth", use "Plant sprout growing time-lapse".
+            * Instead of "Wealth", use "Golden coins falling" or "Luxury car interior".
+            * Instead of "Hard Work", use "Person typing on keyboard backlit" or "Man sweating workout".
+        - SEARCH LANGUAGE: Always use English. Maximum 4 words.
+        - FILTERS: Append aesthetic tags like "Moody", "Cinematic", "Blurred background", or "Top view".
 
         ---------------------------------------------------------
-        MANDATORY: Return ONLY a SINGLE JSON object. Use ONLY the provided schema keys.
+        RULE 2: CONTENT ARCHITECTURE (META 2026)
+        - HOOK: Scene 1 must be a high-impact visual (Macro, Close-up, Slow motion).
+        - DOPAMINE FLOW: If the user asks for a specific clip count (e.g., 7 clips), divide the script into short, punchy segments (2-4s each).
+        - CONSISTENCY: Ensure all keywords share a similar lighting style (e.g., "Dark Noir", "Bright Minimal", or "Golden Hour").
+
+        ---------------------------------------------------------
+        TECHNICAL RULES:
+        - DURATION: Must be an INTEGER (e.g., 3, not 3.5).
+        - SCENE COUNT: Strictly follow the user's requested number of clips.
+        - JSON ONLY: Return a single JSON object. No markdown.
         """
 
         response = client.models.generate_content(
@@ -100,16 +95,11 @@ def generate_script(topic: str) -> dict:
             )
         )
 
-        if not response.text:
-            return None
-        
-        # Parsing sicuro
         raw_data = json.loads(response.text)
-        if isinstance(raw_data, list):
-            raw_data = raw_data[0]
+        if isinstance(raw_data, list): raw_data = raw_data[0]
             
         return VideoScript.model_validate(raw_data).model_dump()
 
     except Exception as e:
-        st.error(f"AI Engine Error: {str(e)}")
+        st.error(f"AI Error: {str(e)}")
         return None
