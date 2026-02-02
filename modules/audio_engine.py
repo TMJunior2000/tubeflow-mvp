@@ -1,25 +1,18 @@
-import asyncio
-from typing import Optional
 import edge_tts
-import tempfile
+import asyncio
+import os
 
-async def _generate_tts_async(text, voice, output_path):
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_path)
+async def _create_voice_file(text, voice, rate, output_file):
+    # Rate format: "+10%" or "-10%"
+    communicate = edge_tts.Communicate(text, voice, rate=rate)
+    await communicate.save(output_file)
 
-def generate_voiceover_file(text: str, voice: str = "en-US-ChristopherNeural") -> Optional[str]:
-    """
-    Crea un MP3 temporaneo e ritorna il path (o i bytes).
-    """
+def generate_voiceover_file(text, voice, speed_rate="+0%"):
+    """Genera audio con controllo velocità (intonazione indiretta)"""
+    output_path = "voiceover.mp3"
     try:
-        # File temporaneo che non si cancella subito
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        temp_file.close()
-        
-        # Esecuzione Async in contesto Sync
-        asyncio.run(_generate_tts_async(text, voice, temp_file.name))
-        
-        return temp_file.name
+        asyncio.run(_create_voice_file(text, voice, speed_rate, output_path))
+        return output_path
     except Exception as e:
         print(f"TTS Error: {e}")
         return None

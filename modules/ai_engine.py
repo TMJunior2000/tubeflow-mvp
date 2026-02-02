@@ -3,82 +3,93 @@ import os
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
-# --- MODELLI DATI ---
+# --- MODELLI DATI (Output Strutturato) ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
     keyword: str
     duration: int
 
+class AudioSettings(BaseModel):
+    music_query: str     # Es: "Epic Orchestral", "Sad Piano", "Cyberpunk"
+    voice_speed: str     # Es: "+10%" (Veloce), "-10%" (Lento), "+0%" (Normale)
+
 class VideoScript(BaseModel):
+    audio_settings: AudioSettings
     scenes: List[Scene]
 
-# --- FUNZIONE PRINCIPALE ---
-def generate_script(topic: str, vibe: str) -> List[dict]:
-    """
-    Genera lo script usando Gemini 1.5 Flash.
-    Include logica ADATTIVA (1 vs 5 clip) e COERENZA VISIVA.
-    """
+# --- FUNZIONE GENERAZIONE ---
+def generate_script(topic: str) -> Optional[dict]:
     
-    # Recupera API Key
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
-        st.error("⚠️ Errore: API Key mancante.")
-        return []
+        st.error("⚠️ Errore: Chiave API mancante.")
+        return None
 
     try:
         client = genai.Client(api_key=api_key)
         
-        # --- IL PROMPT DEFINITIVO (Director Mode) ---
+        # --- IL NUOVO PROMPT "AUTONOMOUS DIRECTOR" ---
         system_instruction = """
-        You are an elite Stock Footage Curator and Video Director.
-        Your goal is to translate a User Topic into a sequence of search queries for Pexels/Pixabay.
+        You are an AI Video Director. 
+        Your goal is to convert a user Topic into a full production plan (Script, Visuals, Audio).
 
         ---------------------------------------------------------
-        STEP 1: ANALYZE INTENT (Adaptive Structure)
+        PHASE 1: AUDIO & MOOD ANALYSIS
         ---------------------------------------------------------
-        Decide the best structure based on the topic complexity:
-
-        👉 MODE A: "THE MOMENT" (Specific Action/Vibe)
-           - Trigger: User asks for a single specific action (e.g., "Penguin climbing mountain", "Rain on window").
-           - Output: 1 or 2 Scenes MAX.
-           - Duration: 10 to 15 seconds per scene (Long takes to show the action).
-           - Strategy: Find the exact visual match.
-
-        👉 MODE B: "THE STORY" (Narrative/List)
-           - Trigger: User asks for a concept, tips, or a story (e.g., "3 tips for success", "History of Rome").
-           - Output: 3 to 5 Scenes.
-           - Duration: 3 to 5 seconds per scene (Fast paced cuts).
-           - Strategy: Use visual metaphors to tell the story.
+        Analyze the emotion of the topic to set the audio atmosphere:
+        1. Music Query: Generate a specific search term for Pixabay Audio.
+           - Sad/Emotional -> "Sad Piano", "Cinematic Emotional"
+           - Tech/Future -> "Synthwave", "Cyberpunk", "Technology"
+           - Nature/Calm -> "Forest Ambient", "Meditation"
+           - Action/Hype -> "Epic Rock", "Action Trailer", "Phonk"
+        
+        2. Voice Speed: Set the speaking rate for the narrator.
+           - Serious/Dramatic -> "-10%" or "-15%" (Slow)
+           - Energetic/TikTok -> "+10%" or "+20%" (Fast)
+           - Educational/Normal -> "+0%"
 
         ---------------------------------------------------------
-        STEP 2: VISUAL CONSISTENCY (The "Anti-Frankenstein" Rule)
+        PHASE 2: VISUAL STRUCTURE (The "One-Shot" Rule)
         ---------------------------------------------------------
-        - CRITICAL: You must pick ONE visual setting/theme and stick to it for the whole video.
-        - BAD: Scene 1 (Desert) -> Scene 2 (Snow) -> Scene 3 (Office).
-        - GOOD: Scene 1 (Snowy mountain bottom) -> Scene 2 (Snowy cliff) -> Scene 3 (Snowy peak).
-        - EXCEPTION: Only switch environments if the script explicitly compares them (e.g., "Summer vs Winter").
+        Determine the number of scenes based on the content type:
+        
+        👉 TYPE A: ATMOSPHERE / SINGLE ACTION
+        - If the user describes a vibe or a continuous action (e.g., "Rain on window", "Girl walking in city").
+        - OUTPUT: 1 Scene (15-20 seconds).
+        - VISUAL: One continuous, high-quality shot.
+        
+        👉 TYPE B: NARRATIVE / LIST
+        - If the user asks for a story, a list of tips, or contrasting ideas.
+        - OUTPUT: 3 to 5 Scenes (3-5 seconds each).
+        - VISUAL: Dynamic cuts, visual consistency (same environment).
 
         ---------------------------------------------------------
-        STEP 3: SEARCH TAG OPTIMIZATION (The Pexels Protocol)
+        PHASE 3: SEARCH TAG OPTIMIZATION (Pexels Protocol)
         ---------------------------------------------------------
-        1. FORMULA: Use [Subject] + [Context] + [Lighting/Action].
-        2. SIMPLICITY: Stock engines are dumb. 
-           - Don't use: "Overcoming adversity" (Abstract) -> Use: "Hiker mountain top" (Physical).
-           - Don't use: "Penguin struggling to climb" -> Use: "Penguin walking snow" (Findable).
-        3. ENGLISH ONLY.
-        4. NO TECHNICAL SPECS: Do not write "Vertical", "4k", or "Real" in keywords.
+        - KEYWORDS: Must be [Subject] + [Context]. English Only.
+        - NO ABSTRACTS: Do not use "Success", use "Man on mountain top".
+        - NO TECHNICALS: Do not use "4k", "Vertical".
 
-        OUTPUT: Valid JSON only matching the schema.
+        OUTPUT: Valid JSON matching the schema.
         """
         
-        user_prompt = f"TOPIC: {topic}\nSTYLE/VIBE: {vibe}"
+        user_prompt = f"TOPIC: {topic}"
 
+        # Schema JSON per forzare l'output strutturato
         manual_schema = {
             "type": "OBJECT",
             "properties": {
+                "audio_settings": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "music_query": {"type": "STRING"},
+                        "voice_speed": {"type": "STRING"}
+                    },
+                    "required": ["music_query", "voice_speed"]
+                },
                 "scenes": {
                     "type": "ARRAY",
                     "items": {
@@ -93,10 +104,9 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
                     }
                 }
             },
-            "required": ["scenes"]
+            "required": ["audio_settings", "scenes"]
         }
 
-        # Chiamata a Gemini
         response = client.models.generate_content(
             model="gemini-flash-latest", 
             contents=user_prompt,
@@ -104,15 +114,15 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=manual_schema,
-                temperature=0.7 
+                temperature=0.7
             )
         )
 
-        if not response.text: return []
+        if not response.text: return None
         
-        script_obj = VideoScript.model_validate_json(response.text)
-        return [scene.model_dump() for scene in script_obj.scenes]
+        # Restituiamo il dizionario completo (Settings + Scene)
+        return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
-        print(f"AI Error: {e}") # Log in console per debug
-        return []
+        print(f"AI Error: {e}")
+        return None
