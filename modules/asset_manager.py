@@ -1,6 +1,5 @@
 import requests
 import streamlit as st
-import random
 import os
 
 def get_api_keys():
@@ -11,42 +10,62 @@ def get_api_keys():
 def get_hybrid_video(keyword: str, orientation: str, excluded_urls=None):
     if excluded_urls is None: excluded_urls = []
     pex_key, pix_key = get_api_keys()
+    query = keyword.lower().strip()
     
-    # Pulizia e preparazione query
-    query = keyword.strip()
-    
-    # 1. TENTATIVO PEXELS (Priorità Qualità)
+    candidates = []
+
+    # 1. RACCOLTA CANDIDATI DA PEXELS
     if pex_key:
         try:
             h = {"Authorization": pex_key}
-            u = f"https://api.pexels.com/videos/search?query={query}&per_page=10&orientation={orientation}"
+            u = f"https://api.pexels.com/videos/search?query={query}&per_page=5&orientation={orientation}"
             r = requests.get(u, headers=h, timeout=5)
             if r.status_code == 200:
-                videos = r.json().get("videos", [])
-                random.shuffle(videos)
-                for v in videos:
+                for v in r.json().get("videos", []):
+                    # Pexels non invia tag chiari via API per i video, usiamo l'alt o il titolo della URL
+                    score = 0
+                    if query in v.get('url', '').lower(): score += 5
+                    
                     link = v['video_files'][0]['link']
-                    # Scegli HD se disponibile
                     for f in v['video_files']:
-                        if f['quality'] == 'hd' and f['width'] >= 720: 
-                            link = f['link']; break
+                        if f['quality'] == 'hd' and f['width'] >= 720: link = f['link']; break
+                    
                     if link not in excluded_urls:
-                        return {"source": "Pexels", "preview": v['video_files'][0]['link'], "download": link}
+                        candidates.append({
+                            "score": score,
+                            "source": "Pexels",
+                            "preview": v['video_files'][0]['link'],
+                            "download": link
+                        })
         except: pass
 
-    # 2. TENTATIVO PIXABAY (Fallback)
+    # 2. RACCOLTA CANDIDATI DA PIXABAY
     if pix_key:
         try:
             p_orient = "vertical" if orientation == "portrait" else "horizontal"
-            params = {"key": pix_key, "q": query, "per_page": 10, "orientation": p_orient}
+            params = {"key": pix_key, "q": query, "per_page": 5, "orientation": p_orient, "video_type": "film"}
             r = requests.get("https://pixabay.com/api/videos/", params=params, timeout=5)
             if r.status_code == 200:
-                hits = r.json().get('hits', [])
-                random.shuffle(hits)
-                for v in hits:
-                    link = v['videos']['medium']['url'] or v['videos']['small']['url']
-                    if link not in excluded_urls:
-                        return {"source": "Pixabay", "preview": v['videos']['tiny']['url'], "download": link}
+                for v in r.json().get('hits', []):
+                    # Pixabay fornisce tag espliciti, molto utili per la coerenza
+                    tags = v.get('tags', '').lower()
+                    score = 0
+                    for word in query.split():
+                        if word in tags: score += 10 # Punteggio alto se la parola è nei tag
+                    
+                    link = v['videos'].get('medium', {}).get('url') or v['videos'].get('large', {}).get('url')
+                    if link and link not in excluded_urls:
+                        candidates.append({
+                            "score": score,
+                            "source": "Pixabay",
+                            "preview": v['videos']['tiny']['url'],
+                            "download": link
+                        })
         except: pass
+
+    # 3. SELEZIONE DELLA CLIP MIGLIORE
+    if not candidates: return None
     
-    return None
+    # Ordiniamo per punteggio (il più alto vince)
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    return candidates[0]
