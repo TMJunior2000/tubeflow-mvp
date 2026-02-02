@@ -118,14 +118,18 @@ def main():
 
             if use_music:
                 st.write("🎵 Finding Music...")
-                _, music_url = get_background_music(vibe)
-            
+                # Attenzione qui: get_background_music ritorna (page_url, mp3_url)
+                # Dobbiamo passare l'intera tupla o estrarre l'mp3
+                music_data = get_background_music(vibe) 
+                if music_data:
+                    music_url = music_data[1] # Prendiamo solo il link diretto all'MP3
+
             if use_voice and voice_id:
                 st.write("🎙️ Recording Voiceover...")
                 voice_path = generate_voiceover_file(full_text, voice_id)
 
             st.write("📦 Packaging...")
-            # Passiamo l'orientation all'exporter!
+            # Chiamata corretta
             zip_data = create_smart_package(final_scenes, orientation, music_url, voice_path)
             
             status.update(label="✅ GENERATION COMPLETE", state="complete")
