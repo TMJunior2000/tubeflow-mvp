@@ -1,0 +1,99 @@
+Free Photos/Videos
+
+https://pixabay.com/
+
+https://www.pngwing.com/ (free PNGs)
+
+https://imgbin.com/ (free PNGs)
+
+https://www.freepik.com/
+
+https://tinybots.net/artbot/create (AI image generator)
+
+Free Music
+
+YouTube audio library
+
+https://pixabay.com/
+
+https://incompetech.com/music/royalty-free/music.html
+
+https://ncs.io/
+
+https://uppbeat.io/ (3 free tracks/month)
+
+https://www.scottbuckley.com.au/library/
+
+https://streambeats.com/
+
+https://www.bensound.com/free-music-for-videos
+
+https://www.purple-planet.com/
+
+https://imuno.sourceaudio.com/home (free for non-monetized channels, $15 for use of all tracks for monetized channels)
+
+https://tunes.freepik.com/ (2 free tracks/day)
+
+https://filmmusic.io/en
+
+https://jcazmusic.com/free-stuff (sometimes free stuff)
+
+https://www.free-stock-music.com/
+
+https://www.silvermansound.com/free-music
+
+Free Sound Effects
+
+https://pixabay.com/
+
+https://www.soundjay.com/index.html
+
+https://bigsoundbank.com/categories.html
+
+https://www.zapsplat.com/sound-effect-packs/
+
+Free Audio Editors
+
+Audacity
+
+FL Studio (free version can't open project files)
+
+Bandlab (better alternative to FL studio)
+
+Reaper
+
+Cakewalk
+
+Free Video Editors
+
+Davinci Resolve
+
+Kdenlive
+
+Clipchamp
+
+ShotCut
+
+FOR MOBILE: Not many options other than Capcut or Youcut
+
+Free Photo Editors
+
+GIMP
+
+Photopea
+
+Darktable
+
+FOR MOBILE: Pixellab
+
+For Clippers
+
+ClipsCutter (free for a few days)
+
+Others
+
+Reactor Plugin for DaVinci Resolve 19.0 (access to many cool visual effects)
+
+CnvMp4 for downloading videos
+
+Froza for downloading thumbnails

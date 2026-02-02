@@ -1,76 +1,93 @@
 import requests
 import streamlit as st
+import random
 import os
 
-def get_pexels_video(keyword: str, vibe: str = "General"): # <--- Aggiunto parametro vibe
-    """
-    Cerca video su Pexels filtrando per Colore/Stile per garantire coerenza visiva.
-    """
-    api_key = os.getenv("PEXELS_API_KEY") or st.secrets.get("PEXELS_API_KEY")
-    
-    if not api_key:
-        print("❌ Errore: PEXELS_API_KEY mancante.")
-        return None, None, None, None
+def get_api_keys():
+    """Recupera chiavi dai secrets di Streamlit."""
+    pex = os.getenv("PEXELS_API_KEY") or st.secrets.get("PEXELS_API_KEY")
+    pix = os.getenv("PEXELS_API_KEY") or st.secrets.get("PIXABAY_API_KEY")
+    return pex, pix
 
-    headers = {"Authorization": api_key}
+def get_hybrid_video(keyword: str, vibe: str):
+    """
+    Logica Waterfall: Pexels (Qualità) -> Fallback Pixabay (Quantità).
+    """
+    pex_key, pix_key = get_api_keys()
     
-    # --- LOGICA "VISUAL GLUE" (Coerenza Cromatica) ---
-    # Mappiamo le Vibes a codici colore HEX o keyword stilistiche
-    color_param = ""
-    style_suffix = ""
+    # 1. Tentativo Pexels (Priorità al Verticale)
+    if pex_key:
+        video = _search_pexels(keyword, vibe, pex_key)
+        if video: return video | {"source": "Pexels"}
     
-    if "Dark" in vibe:
-        color_param = "&color=000000" # Cerca video scuri/neri
-        style_suffix = " dark moody"
-    elif "Luxury" in vibe:
-        color_param = "&color=DAA520" # Golden Rod (Toni Oro/Marrone)
-        style_suffix = " luxury elegant"
-    elif "Tech" in vibe:
-        color_param = "&color=0000FF" # Toni Blu/Freddi
-        style_suffix = " futuristic blue"
-    elif "Minimalist" in vibe:
-        color_param = "&color=E6E6FA" # Lavender/White (Toni chiari)
-        style_suffix = " bright clean"
-    else:
-        # Per "Fast Paced" o generici, non filtriamo il colore ma cerchiamo qualità
-        color_param = "" 
-        style_suffix = ""
+    # 2. Tentativo Pixabay (Fallback)
+    if pix_key:
+        video = _search_pixabay(keyword, vibe, pix_key)
+        if video: return video | {"source": "Pixabay"}
 
-    # Costruiamo la query arricchita (Keyword + Stile)
-    final_query = f"{keyword}{style_suffix}"
-    
-    # URL con parametro COLOR e orientamento
-    url = f"https://api.pexels.com/videos/search?query={final_query}&per_page=1&orientation=portrait{color_param}"
+    return None
+
+def _search_pexels(keyword, vibe, key):
+    headers = {"Authorization": key}
+    # Logica colori per vibe
+    color = "&color=000000" if "Dark" in vibe else ""
+    url = f"https://api.pexels.com/videos/search?query={keyword}&per_page=1&orientation=portrait{color}"
     
     try:
         r = requests.get(url, headers=headers, timeout=5)
-        
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("videos"):
-                video = data["videos"][0]
-                
-                photographer = video.get('user', {}).get('name', 'Pexels User')
-                photographer_url = video.get('user', {}).get('url', 'https://www.pexels.com')
-                
-                files = video.get("video_files", [])
-                preview_link = None
-                download_link = None
-                
-                for f in files:
-                    if f.get('quality') == 'sd' and f.get('width', 0) < 1000:
-                        preview_link = f['link']
-                    if f.get('quality') == 'hd':
-                        download_link = f['link']
-                
-                if not download_link and files:
-                    download_link = files[0]['link']
-                if not preview_link:
-                    preview_link = download_link
+        data = r.json()
+        if data.get("videos"):
+            vid = data["videos"][0]
+            # Cerca link HD
+            dl_link = next((f['link'] for f in vid['video_files'] if f['quality']=='hd'), vid['video_files'][0]['link'])
+            return {
+                "preview": vid['video_files'][0]['link'],
+                "download": dl_link,
+                "author": vid['user']['name']
+            }
+    except Exception:
+        pass
+    return None
 
-                return preview_link, download_link, photographer, photographer_url
-                
-    except Exception as e:
-        print(f"Errore Pexels: {e}")
-        
-    return None, None, None, None
+def _search_pixabay(keyword, vibe, key):
+    # Aggiungiamo 'vertical' alla query perché il filtro API a volte fallisce
+    query = f"{keyword} vertical"
+    url = f"https://pixabay.com/api/videos/?key={key}&q={query}&video_type=film&per_page=3"
+    
+    try:
+        r = requests.get(url, timeout=5)
+        data = r.json()
+        if int(data.get("totalHits", 0)) > 0:
+            vid = data["hits"][0]
+            # Pixabay struttura diversa
+            return {
+                "preview": vid["videos"]["tiny"]["url"],
+                "download": vid["videos"]["medium"]["url"],
+                "author": f"PixabayUser_{vid['user_id']}"
+            }
+    except Exception:
+        pass
+    return None
+
+def get_background_music(vibe: str):
+    """Scarica musica MP3 da Pixabay Audio."""
+    _, pix_key = get_api_keys()
+    if not pix_key: return None, None
+    
+    # Mapping Vibe -> Tag Musicale
+    tag = "ambient"
+    if "Fast Paced" in vibe: tag = "upbeat"
+    elif "Dark" in vibe: tag = "cinematic"
+    elif "Tech" in vibe: tag = "electronic"
+    
+    url = f"https://pixabay.com/api/?key={pix_key}&q={tag}&category=music&per_page=3"
+    
+    try:
+        r = requests.get(url, timeout=3)
+        data = r.json()
+        if int(data.get("totalHits", 0)) > 0:
+            track = random.choice(data["hits"])
+            return track["pageURL"], track["videos"]["large"]["url"] # URL MP3
+    except:
+        pass
+    return None, None
