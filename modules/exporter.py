@@ -3,10 +3,9 @@ from io import BytesIO
 import requests
 import os
 
-# --- HEADERS ANTI-HOTLINKING ---
-# La documentazione dice: "Download them to your server".
-# Pixabay controlla il Referer per bloccare l'hotlinking diretto.
-def get_browser_headers():
+# --- HEADERS PER EVITARE HOTLINKING BLOCK ---
+# Questo fa credere a Pixabay che il download sia stato richiesto dal loro sito
+def get_download_headers():
     return {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         "Referer": "https://pixabay.com/", 
@@ -69,37 +68,43 @@ def create_smart_package(scenes, orientation, music_url=None, voiceover_path=Non
 
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
         
-        # 1. VIDEO
+        # 1. SCARICA VIDEO (Con Headers)
         for i, scene in enumerate(scenes):
             url = scene.get('video_link') or scene.get('download')
             if url:
                 try:
-                    r = requests.get(url, headers=get_browser_headers(), timeout=20)
+                    # Usiamo gli headers anche qui per sicurezza
+                    r = requests.get(url, headers=get_download_headers(), timeout=30, stream=True)
                     if r.status_code == 200:
                         zf.writestr(f"Assets/{i+1:02d}_Clip.mp4", r.content)
                 except Exception as e:
                     zf.writestr(f"Assets/ERR_VID_{i+1}.txt", str(e))
 
-        # 2. MUSICA (Con Headers corretti per Pixabay CDN)
+        # 2. SCARICA MUSICA (CRUCIALE: FIX 403)
         if music_url:
             try:
+                # Se è una tupla (page, mp3), prendi l'mp3
                 real_url = music_url[1] if isinstance(music_url, tuple) else music_url
                 print(f"⬇️ DOWNLOAD AUDIO: {real_url}")
                 
-                # allow_redirects=True è fondamentale
-                r = requests.get(real_url, headers=get_browser_headers(), timeout=30, allow_redirects=True, stream=True)
+                # --- IL FIX DEFINITIVO ---
+                # 1. Headers con Referer e User-Agent
+                # 2. allow_redirects=True (CDN spesso fanno redirect)
+                r = requests.get(real_url, headers=get_download_headers(), timeout=30, allow_redirects=True)
                 
                 if r.status_code == 200:
                     music_data = r.content
-                    # Filtra file di errore vuoti o minuscoli
+                    # Filtra file corrotti/vuoti
                     if len(music_data) > 5000: 
                         zf.writestr("Assets/Background_Music.mp3", music_data)
                         has_music = True
                         print("✅ Audio salvato.")
                     else:
-                        zf.writestr("Assets/DEBUG_MUSIC_SMALL.txt", f"Size: {len(music_data)}")
+                        zf.writestr("Assets/DEBUG_MUSIC_SMALL.txt", f"Size: {len(music_data)} bytes")
                 else:
-                    zf.writestr("Assets/DEBUG_MUSIC_HTTP.txt", f"Code: {r.status_code}")
+                    # Questo cattura il 403 se succede ancora
+                    zf.writestr("Assets/DEBUG_MUSIC_HTTP.txt", f"Code: {r.status_code} | Msg: {r.text}")
+                    print(f"❌ HTTP Error: {r.status_code}")
             except Exception as e:
                 zf.writestr("Assets/DEBUG_MUSIC_EXC.txt", str(e))
 

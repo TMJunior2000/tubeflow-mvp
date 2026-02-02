@@ -9,27 +9,25 @@ def get_api_keys():
     return pex, pix
 
 # ==========================================
-# 🎥 SEZIONE VIDEO (Pixabay Specifica)
+# 🎥 SEZIONE VIDEO (Qualità + Breadcrumbs)
 # ==========================================
 def get_hybrid_video(keyword: str, vibe: str, orientation: str):
     pex_key, pix_key = get_api_keys()
     
-    # Pulizia Keyword
+    # 1. Pulizia e Breadcrumbs
     base_keyword = keyword.replace("Vertical", "").replace("Portrait", "").replace("Landscape", "").strip()
-    
-    # Breadcrumbs
     words = base_keyword.split()
     breadcrumbs = []
     for i in range(len(words), 0, -1):
         breadcrumbs.append(" ".join(words[:i]))
     if not breadcrumbs: breadcrumbs = [base_keyword]
 
-    print(f"🔍 Search: {breadcrumbs}")
+    print(f"🔍 Search Strategy: {breadcrumbs}")
 
     for attempt, query in enumerate(breadcrumbs):
         match_label = "🟢 EXACT MATCH" if attempt == 0 else "🟡 BROAD MATCH"
         
-        # PEXELS SEARCH
+        # --- PEXELS (Gestione HD) ---
         vid_pex = None
         if pex_key:
             try:
@@ -40,19 +38,21 @@ def get_hybrid_video(keyword: str, vibe: str, orientation: str):
                     d = r.json()
                     if d.get("videos"):
                         v = d["videos"][0]
+                        # Cerchiamo qualità HD (minimo 720p)
                         dl = v['video_files'][0]['link']
                         for f in v['video_files']:
-                            if f['quality'] == 'hd' and f['width'] >= 720: dl = f['link']; break
+                            if f['quality'] == 'hd' and f['width'] >= 720: 
+                                dl = f['link']; break
                         vid_pex = {"source":"Pexels", "preview": v['video_files'][0]['link'], "download": dl}
             except: pass
 
-        # PIXABAY SEARCH (Aggiornato alla Doc)
+        # --- PIXABAY (Gestione Qualità Documentata) ---
         vid_pix = None
         if pix_key:
             try:
-                # Nota: Pixabay Video API non ha parametro 'orientation'.
-                # Per verticali dobbiamo aggiungerlo alla query.
+                # Documentazione: Video non supportano filtro orientation, lo aggiungiamo alla query
                 pix_query = f"{query} vertical" if orientation == "portrait" else query
+                # Documentazione: q deve essere URL encoded (requests lo fa da solo)
                 u = f"https://pixabay.com/api/videos/?key={pix_key}&q={pix_query}&per_page=3"
                 
                 r = requests.get(u, timeout=5)
@@ -60,18 +60,21 @@ def get_hybrid_video(keyword: str, vibe: str, orientation: str):
                     d = r.json()
                     if int(d.get('totalHits', 0)) > 0:
                         v = d['hits'][0]
-                        # DOCUMENTAZIONE: hit['videos']['medium']['url']
-                        # 'medium' è 1920x1080 o 1280x720 (perfetto)
-                        if 'medium' in v['videos']:
+                        
+                        # SCELTA RISOLUZIONE (Evitiamo 'tiny')
+                        # La doc dice che 'medium' è quasi sempre disponibile ed è 720p/1080p
+                        if 'medium' in v['videos'] and v['videos']['medium']['size'] > 0:
                             dl = v['videos']['medium']['url']
+                        elif 'large' in v['videos'] and v['videos']['large']['size'] > 0:
+                             dl = v['videos']['large']['url']
                         elif 'small' in v['videos']:
                             dl = v['videos']['small']['url']
                         else:
-                            dl = v['videos']['tiny']['url']
+                            dl = v['videos']['tiny']['url'] # Ultima spiaggia
                             
                         vid_pix = {"source":"Pixabay", "preview": v['videos']['tiny']['url'], "download": dl}
             except Exception as e:
-                print(f"Pixabay Vid Error: {e}")
+                print(f"Pixabay Error: {e}")
 
         # Selezione Vincitore
         if vid_pex and vid_pix:
@@ -87,41 +90,38 @@ def get_hybrid_video(keyword: str, vibe: str, orientation: str):
 # ==========================================
 def get_pixabay_audio(genre: str, mood: str):
     """
-    Restituisce (PageURL, Mp3URL) se ha successo.
-    Restituisce (None, MESSAGGIO_ERRORE) se fallisce.
+    Restituisce (PageURL, Mp3URL) oppure (None, ErrorMsg).
     """
     _, pix_key = get_api_keys()
     
     if not pix_key:
-        return None, "ERRORE: API Key mancante nei secrets/env."
+        return None, "ERRORE: API Key mancante."
 
-    # Costruzione URL
-    url = f"https://pixabay.com/api/audio/?key={pix_key}&q={genre}+{mood}&per_page=10"
+    # Documentazione: category=genre + q=mood
+    url = f"https://pixabay.com/api/audio/?key={pix_key}&q={genre}+{mood}&per_page=5"
     
     try:
-        r = requests.get(url, timeout=10)
+        # Aggiungo headers anche qui per evitare blocchi preventivi (Rate Limit check)
+        h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        r = requests.get(url, headers=h, timeout=10)
         
-        # CASO 1: Errore HTTP (es. 401 Unauthorized, 429 Rate Limit)
         if r.status_code != 200:
             return None, f"HTTP ERROR {r.status_code}: {r.text}"
 
         data = r.json()
         hits = data.get("hits", [])
         
-        # CASO 2: Zero Risultati
         if len(hits) == 0:
-            # Tentativo disperato solo col mood
-            r2 = requests.get(f"https://pixabay.com/api/audio/?key={pix_key}&q={mood}", timeout=10)
+            # Fallback intelligente: prova solo il mood
+            r2 = requests.get(f"https://pixabay.com/api/audio/?key={pix_key}&q={mood}", headers=h, timeout=10)
             if r2.status_code == 200 and r2.json().get("hits"):
                 track = random.choice(r2.json()["hits"])
                 return track.get("pageURL"), track.get("url")
             else:
-                return None, f"NESSUN RISULTATO trovato per '{genre} + {mood}' (nemmeno al retry)."
+                return None, f"NESSUN RISULTATO per '{genre} + {mood}'"
 
-        # CASO 3: Successo
         track = random.choice(hits)
         return track.get("pageURL"), track.get("url")
 
     except Exception as e:
-        # CASO 4: Errore Python (es. niente internet)
         return None, f"EXCEPTION: {str(e)}"
