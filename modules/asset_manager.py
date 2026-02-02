@@ -65,54 +65,6 @@ def _search_pixabay(keyword, orientation, key):
     except: pass
     return None
 
-# --- AUDIO SEARCH (API REALE) ---
-def get_contextual_music(query: str):
-    """
-    Cerca musica su Pixabay con strategia 'Search & Rescue'.
-    1. Prova la query specifica.
-    2. Se 0 risultati, prova la query generica (solo la prima parola).
-    3. Se fallisce tutto, usa un MP3 di backup garantito.
-    """
-    _, pix_key = get_api_keys()
-    
-    # Lista di backup (Link diretti CDN stabili)
-    SAFE_FALLBACK_MP3 = "https://cdn.pixabay.com/download/audio/2022/03/24/audio_1969a58943.mp3" # Brano 'Cinematic' generico
-    
-    if not pix_key: 
-        print("⚠️ Pixabay Key mancante. Uso Fallback.")
-        return "Generic Music", SAFE_FALLBACK_MP3
-
-    # Tentativi di ricerca
-    search_attempts = [
-        query,                  # Es: "Epic Japanese Drums" (Specifico)
-        query.split()[0],       # Es: "Epic" (Generico)
-        "Cinematic"             # Es: "Cinematic" (Sicuro)
-    ]
-
-    for q in search_attempts:
-        if len(q) < 3: continue # Salta query troppo corte
-        
-        url = f"https://pixabay.com/api/audio/?key={pix_key}&q={q}&per_page=3"
-        try:
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                if int(data.get("totalHits", 0)) > 0:
-                    track = random.choice(data["hits"])
-                    # Pixabay a volte chiama il campo 'url', a volte è nascosto.
-                    # Ma 'url' è lo standard per l'audio preview (che è un mp3 completo).
-                    mp3_link = track.get("url") 
-                    if mp3_link:
-                        print(f"🎵 TROVATO con query '{q}': {mp3_link}")
-                        return track.get("pageURL"), mp3_link
-        except Exception as e:
-            print(f"⚠️ Errore API Pixabay su '{q}': {e}")
-            continue # Prova il prossimo tentativo
-
-    # Se arriviamo qui, l'API ha fallito tutte le query. Usiamo il salvagente.
-    print("🚨 MUSIC FALLBACK ACTIVATED: Using safe MP3.")
-    return "Fallback Music", SAFE_FALLBACK_MP3
-
 def get_pixabay_audio(genre: str, mood: str):
     """
     Cerca musica usando i TAG tecnici di Pixabay.
