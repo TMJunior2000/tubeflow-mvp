@@ -27,74 +27,72 @@ def generate_script(topic: str) -> dict:
         return None
 
     try:
-        # Client v1alpha per Gemini 3
+        # v1alpha configuration for Gemini 3 capabilities
         client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
         
-        # --- THE SNIPER PROMPT (META 2026) ---
+        # --- YOUR META 2026 PROMPT (Translated to English) ---
         system_instruction = """
-        You are TubeFlow v3 "Expert Edition", the elite Video Architect for 2026 viral content.
-        Your goal is to translate User Requests into high-retention Faceless videos using Pexels/Pixabay.
-
-        MANDATORY: Return a SINGLE JSON OBJECT. Do not use markdown blocks.
+        You are TubeFlow v3 "Expert Edition", a specialist in the 2026 viral content meta-game.
+        Your goal is to create "Faceless" videos that don't look like generic stock, optimizing for retention and dopamine loops.
 
         ---------------------------------------------------------
-        RULE 1: SNIPER SEARCH & 2026 AESTHETICS
-        - LATERAL ASSOCIATION: Avoid literal/abstract queries. 
-             * "Success" -> "Luxury watch detail" or "Skyscraper top view".
-             * "Solitude" -> "Lone boat on lake" or "Rainy window moody".
-        - SEARCH STRATEGY: Use [Subject] + [Environment]. Keywords must be in ENGLISH, max 3 words.
-        - ESTHETIC TAGS: Append tags like "Moody", "Cinematic", "Grainy", or "Minimalist" to keywords.
+        RULE 1: SNIPER SEARCH & 2026 AESTHETICS (PEXELS/PIXABAY)
+        - LATERAL ASSOCIATIONS: Avoid literal/didactic queries. 
+             * Instead of "Sadness", use "Rain on window dark" or "Single dead leaf".
+             * Instead of "Success", use "Luxury car detail" or "Minimalist office view".
+        - "IMPERFECT VINTAGE" AESTHETIC: For every scene, add aesthetic tags like "Moody", "Cinematic", "Grainy", "Slow shutter", or "Minimalist".
+        - VISUAL COHERENCE: Maintain a consistent color thread across scenes (e.g., all cold tones or all warm tones).
 
-        RULE 2: DOPAMINE WORKFLOW
-        - THE HOOK (First 2s): Scene 1 MUST have extreme visual impact (Macro, Slow motion, Extreme close-up).
-        - ADAPTIVE PACING: 
-             * For info/viral facts: Fast cuts every 2-3 seconds.
-             * For mood/philosophical: Single long takes (15-30s) or slow cinematic pans.
-        - FORMAT AWARENESS: TikTok (9:16) likes loops and single-take aesthetics; YouTube (16:9) likes variety.
+        RULE 2: THE DOPAMINE WORKFLOW (HOOK & CUTS)
+        - THE HOOK (First 2s): The first scene MUST have extreme visual impact. Use keywords like "Macro", "Slow motion", "Explosion", "Extreme close up".
+        - PACING: If the script is informative, use cuts every 2-3 seconds to maintain high dopamine (Multi-Clip Strategy).
+        - PAUSES: If the script is cinematic/reflective, use long clips with fluid camera movements (Slow Shutter).
 
-        RULE 3: VOICE & TONAL CONTROL
-        - Voice Speed: 
-             * "-10%" for Noir/Deep/Moody stories.
-             * "+10%" for Viral Facts/Hype/Finance.
-             * "+0%" for Standard Narrative.
-        
+        RULE 3: HIGH-RPM NICHES (FEBRUARY 2026)
+        Adapt the script and visuals if you detect these niches:
+        - AI STORIES/CRIME: Dark visuals, shadows, noir atmospheres, fog.
+        - FINANCE/MINIMALISM: "Clean" visuals, geometric lines, modern architecture, quiet luxury.
+        - SILENT VLOG/ASMR: Natural visuals, macro details, textures.
+
+        RULE 4: AUDIO STRATEGY (SFX FOCUS)
+        - The script must implicitly suggest environmental sounds. 
+        - Example: "The wind was blowing..." (User will add wind SFX).
+        - Voice Speed: -10% for noir/moody stories, +10% for facts/finance.
+
         ---------------------------------------------------------
-        JSON SCHEMA:
-        {
-          "voice_settings": {"voice_speed": "string"},
-          "scenes": [{"scene_number": int, "voiceover": "string", "keyword": "string", "duration": int}]
-        }
+        MANDATORY: Return ONLY a SINGLE JSON object. Do not use markdown blocks.
+        REQUIRED FORMAT: JSON consistent with the Pydantic schema.
         """
 
+        # Optimized call based on Gemini 3 documentation
         response = client.models.generate_content(
             model="gemini-3-flash-preview", 
             contents=f"USER REQUEST: {topic}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
+                # Docs: 'low' reduces latency and helps avoid 503 Overloaded errors
                 thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-                response_mime_type="application/json",
-                temperature=1.0 
+                # Docs: 1.0 is mandatory for Gemini 3 stability
+                temperature=1.0,
+                response_mime_type="application/json"
             )
         )
 
         if not response.text:
             return None
         
-        # --- ANTI-CRASH PARSING LOGIC ---
-        try:
-            raw_data = json.loads(response.text)
-            if isinstance(raw_data, list):
-                raw_data = raw_data[0] # Fixes the "AI returned a list" error
+        # Safe parsing to avoid Validation Errors (lists vs objects)
+        raw_data = json.loads(response.text)
+        if isinstance(raw_data, list):
+            raw_data = raw_data[0]
             
-            # Pydantic validation
-            return VideoScript.model_validate(raw_data).model_dump()
-        except Exception as parse_err:
-            print(f"Parsing failed. Raw response: {response.text}")
-            raise parse_err
+        return VideoScript.model_validate(raw_data).model_dump()
 
     except Exception as e:
-        if "429" in str(e):
-            st.error("🚫 QUOTA EXCEEDED. Create a NEW Google Project to reset the 20-request limit.")
+        if "503" in str(e):
+            st.error("🚀 Gemini 3 Server overloaded. Please try again in a few seconds.")
+        elif "429" in str(e):
+            st.error("🚫 Daily Quota (20 RPD) exhausted. Change your API project.")
         else:
             st.error(f"AI Engine Error: {str(e)}")
         return None
