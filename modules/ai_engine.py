@@ -20,7 +20,7 @@ class VideoScript(BaseModel):
     voice_settings: VoiceSettings
     scenes: List[Scene]
 
-def generate_script(topic: str) -> dict:
+def generate_script(topic: str) -> dict | None:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
         st.error("⚠️ API Key missing.")
@@ -29,6 +29,7 @@ def generate_script(topic: str) -> dict:
     try:
         client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
         
+        # SCHEMA RIGIDO: Impedisce decimali e chiavi inventate
         target_schema = {
             "type": "OBJECT",
             "properties": {
@@ -54,38 +55,37 @@ def generate_script(topic: str) -> dict:
             "required": ["voice_settings", "scenes"]
         }
 
-        # --- IL PROMPT OTTIMIZZATO PER I DATABASE STOCK ---
+        # --- IL PROMPT OTTIMIZZATO PER I TAG STOCK ---
         system_instruction = """
-        You are TubeFlow v3, a professional Video Editor specialized in Pexels and Pixabay database indexing.
-        Your goal is to generate keywords that ALWAYS return high-quality results.
+        You are TubeFlow v3, a specialized Stock Footage Curator for Pexels and Pixabay.
+        Your goal is to provide search queries that guarantee 100% match rate and professional aesthetics.
 
-        ---------------------------------------------------------
-        RULE 1: PEXELS/PIXABAY SNIPER ENGINE (MANDATORY)
-        - KEYWORD STRUCTURE: [Subject] + [Action/Environment] + [Aesthetic].
-        - NO ABSTRACT NOUNS: Never search for "Trust", "Innovation", "Motivation", or "Hate". These databases will fail.
-        - PHYSICAL SUBSTITUTION (Sniperizing):
-            * Instead of "Growth", use "Plant sprout growing time-lapse".
-            * Instead of "Wealth", use "Golden coins falling" or "Luxury car interior".
-            * Instead of "Hard Work", use "Person typing on keyboard backlit" or "Man sweating workout".
-        - SEARCH LANGUAGE: Always use English. Maximum 4 words.
-        - FILTERS: Append aesthetic tags like "Moody", "Cinematic", "Blurred background", or "Top view".
+        --- RULE 1: STOCK DATABASE LOGIC (PEXELS/PIXABAY) ---
+        - NO ABSTRACT WORDS: Never use "Success", "Motivation", "Sadness", or "Future".
+        - SEARCH FORMULA: [Concrete Subject] + [Specific Action/Detail] + [Aesthetic Tag].
+        - PHYSICAL SNIPERIZING examples:
+            * Instead of "Wealth", use: "Gold bar stack" or "Luxury mansion interior".
+            * Instead of "Loneliness", use: "Empty train station night" or "Lone tree winter".
+            * Instead of "Knowledge", use: "Old books library" or "Human brain 3d render".
+        - LANGUAGE: Always English. Max 3-4 words per query.
+        - TOP TAGS: Always include one of: 'Cinematic', 'Moody', 'Minimalist', 'Macro', 'Aerial'.
 
-        ---------------------------------------------------------
-        RULE 2: CONTENT ARCHITECTURE (META 2026)
-        - HOOK: Scene 1 must be a high-impact visual (Macro, Close-up, Slow motion).
-        - DOPAMINE FLOW: If the user asks for a specific clip count (e.g., 7 clips), divide the script into short, punchy segments (2-4s each).
-        - CONSISTENCY: Ensure all keywords share a similar lighting style (e.g., "Dark Noir", "Bright Minimal", or "Golden Hour").
+        --- RULE 2: DOPAMINE RETENTION (2026 META) ---
+        - DURATION LIMIT: For viral/motivational content, EACH scene duration MUST be an INTEGER between 2 and 4 seconds.
+        - CLIP COUNT: If the user asks for 7 clips, provide EXACTLY 7 scenes. 
+        - TOTAL TIME: A 7-clip video must be around 20-25 seconds total.
+        - HOOK: Scene 1 MUST be a visual stunner (Macro or Slow Motion).
 
-        ---------------------------------------------------------
-        TECHNICAL RULES:
-        - DURATION: Must be an INTEGER (e.g., 3, not 3.5).
-        - SCENE COUNT: Strictly follow the user's requested number of clips.
-        - JSON ONLY: Return a single JSON object. No markdown.
+        --- RULE 3: AUDIO & VIBE ---
+        - Voiceover must be punchy and fit the 2-4s window.
+        - Use voice_speed "+10%" for energetic/finance, "-10%" for deep/noir.
+
+        MANDATORY: Return ONLY a JSON object. No markdown.
         """
 
         response = client.models.generate_content(
             model="gemini-3-flash-preview", 
-            contents=f"USER REQUEST: {topic}",
+            contents=f"USER REQUEST: {topic}. 7 clips. Fast pacing. Max 4s each.",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
