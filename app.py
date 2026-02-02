@@ -44,10 +44,16 @@ def main():
         st.session_state['generated_content'] = None
 
         with st.status("🔮 AI Director is working...", expanded=True) as status:
+            
             # 1. AI SCRIPT
             st.write("🧠 AI Scripting...")
             script_data = generate_script(topic)
-            if not script_data: status.update(label="AI Error", state="error"); st.stop()
+            
+            # --- DEBUG: Se fallisce, ferma tutto e mostra l'errore ---
+            if not script_data:
+                status.update(label="❌ AI Error", state="error")
+                st.error("L'Intelligenza Artificiale ha fallito. Controlla: 1. API Key Google 2. Limiti quota.")
+                st.stop()
             
             scenes = script_data['scenes']
             audio = script_data['audio_settings']

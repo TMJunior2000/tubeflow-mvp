@@ -1,10 +1,12 @@
 import streamlit as st
 import os
-from google import genai
-from google.genai import types
+import json
+import google.generativeai as genai
+from google.ai.generativelanguage import Content, Part
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
+# --- MODELLI DATI ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -20,80 +22,85 @@ class VideoScript(BaseModel):
     audio_settings: AudioSettings
     scenes: List[Scene]
 
-def generate_script(topic: str) -> Optional[dict]:
+def generate_script(topic: str) -> dict:
+    
+    # 1. Recupero API KEY
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
-    if not api_key: return None
+    if not api_key:
+        st.error("❌ ERRORE CRITICO: Google API Key non trovata nei secrets o environment.")
+        return None
 
     try:
-        client = genai.Client(api_key=api_key)
+        # 2. Configurazione Vecchia Scuola (Funziona Sempre)
+        genai.configure(api_key=api_key)
         
+        # Configurazione Modello
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 64,
+            "max_output_tokens": 8192,
+            "response_mime_type": "application/json",
+        }
+
+        model = genai.GenerativeModel(
+            model_name="gemini-flash-latest",
+            generation_config=generation_config,
+        )
+        
+        # 3. Prompt Ingegnerizzato
         system_instruction = """
         You are a Video Director using the OFFICIAL Pixabay API.
+        Output MUST be a JSON object following this exact schema.
 
-        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
-        Select ONE Genre and ONE Mood:
-        [GENRES]: "ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"
-        [MOODS]: "contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"
+        PHASE 1: AUDIO TAGGING
+        Select ONE Genre: ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]
+        Select ONE Mood: ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]
 
         PHASE 2: VOICE SPEED
         - "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
 
-        PHASE 3: VISUAL KEYWORDS (The Lobotomy Rule)
-        - You must generate a search query for Stock Video.
-        - BAD: "Samurai warrior standing in rain cinematic" (Too complex, returns 0 results).
-        - GOOD: "Samurai rain" (Perfect).
-        - GOOD: "Cyberpunk city" (Perfect).
+        PHASE 3: VISUAL KEYWORDS
+        - Search query for Stock Video. Simple English. 
+        - BAD: "Samurai standing in rain"
+        - GOOD: "Samurai rain"
         
         STRUCTURE:
-        - 1 Scene (15s) if it's a mood/atmosphere.
-        - 3-5 Scenes if it's a list/tutorial.
+        - 1 Scene for atmosphere.
+        - 3-5 Scenes for lists.
 
-        OUTPUT: Valid JSON only.
+        JSON SCHEMA:
+        {
+            "audio_settings": {
+                "pixabay_genre": "string",
+                "pixabay_mood": "string",
+                "voice_speed": "string"
+            },
+            "scenes": [
+                {
+                    "scene_number": int,
+                    "voiceover": "string",
+                    "keyword": "string",
+                    "duration": int
+                }
+            ]
+        }
         """
         
-        manual_schema = {
-            "type": "OBJECT",
-            "properties": {
-                "audio_settings": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]},
-                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]},
-                        "voice_speed": {"type": "STRING"}
-                    },
-                    "required": ["pixabay_genre", "pixabay_mood", "voice_speed"]
-                },
-                "scenes": {
-                    "type": "ARRAY",
-                    "items": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "scene_number": {"type": "INTEGER"},
-                            "voiceover": {"type": "STRING"},
-                            "keyword": {"type": "STRING"},
-                            "duration": {"type": "INTEGER"}
-                        },
-                        "required": ["scene_number", "voiceover", "keyword", "duration"]
-                    }
-                }
-            },
-            "required": ["audio_settings", "scenes"]
-        }
-
-        response = client.models.generate_content(
-            model="gemini-flash-latest", 
-            contents=f"TOPIC: {topic}",
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=manual_schema,
-                temperature=0.5 
-            )
-        )
-
-        if not response.text: return None
-        return VideoScript.model_validate_json(response.text).model_dump()
+        # 4. Chiamata
+        full_prompt = f"{system_instruction}\n\nTOPIC: {topic}"
+        response = model.generate_content(full_prompt)
+        
+        if not response.text:
+            st.error("❌ Errore AI: Risposta vuota da Gemini.")
+            return None
+        
+        # 5. Parsing JSON Manuale (Più robusto)
+        json_data = json.loads(response.text)
+        return VideoScript.model_validate(json_data).model_dump()
 
     except Exception as e:
-        print(f"AI Error: {e}")
+        # STAMPA L'ERRORE REALE A SCHERMO
+        st.error(f"❌ AI ENGINE ERROR: {str(e)}")
+        print(f"AI ERROR DETAILS: {e}")
         return None
