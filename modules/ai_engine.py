@@ -3,7 +3,7 @@ import os
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class Scene(BaseModel):
     scene_number: int
@@ -20,7 +20,7 @@ class VideoScript(BaseModel):
     audio_settings: AudioSettings
     scenes: List[Scene]
 
-def generate_script(topic: str) -> dict:
+def generate_script(topic: str) -> Optional[dict]:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key: return None
 
