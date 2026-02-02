@@ -30,7 +30,7 @@ def generate_script(topic: str) -> dict:
         system_instruction = """
         You are a Video Director using the OFFICIAL Pixabay API.
 
-        PHASE 1: AUDIO TAGS (Pixabay Official)
+        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
         Select ONE Genre and ONE Mood:
         [GENRES]: "ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"
         [MOODS]: "contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"
@@ -38,9 +38,9 @@ def generate_script(topic: str) -> dict:
         PHASE 2: VOICE SPEED
         - "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
 
-        PHASE 3: VISUAL KEYWORDS (Simple is Better)
-        - You must generate a search query for Pixabay Video.
-        - BAD: "Samurai warrior standing in rain cinematic" (Too complex).
+        PHASE 3: VISUAL KEYWORDS (The Lobotomy Rule)
+        - You must generate a search query for Stock Video.
+        - BAD: "Samurai warrior standing in rain cinematic" (Too complex, returns 0 results).
         - GOOD: "Samurai rain" (Perfect).
         - GOOD: "Cyberpunk city" (Perfect).
         
@@ -95,4 +95,5 @@ def generate_script(topic: str) -> dict:
         return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
+        print(f"AI Error: {e}")
         return None
