@@ -12,7 +12,6 @@ class Scene(BaseModel):
     duration: int
 
 class AudioSettings(BaseModel):
-    # Questi devono corrispondere ai filtri API di Pixabay
     pixabay_genre: str  
     pixabay_mood: str   
     voice_speed: str
@@ -29,29 +28,25 @@ def generate_script(topic: str) -> dict:
         client = genai.Client(api_key=api_key)
         
         system_instruction = """
-        You are a Video Director using the official Pixabay Audio API.
+        You are a Video Director using the OFFICIAL Pixabay API.
 
-        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
-        Select ONE Genre and ONE Mood from the lists below to match the topic.
+        PHASE 1: AUDIO TAGS (Pixabay Official)
+        Select ONE Genre and ONE Mood:
+        [GENRES]: "ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"
+        [MOODS]: "contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"
+
+        PHASE 2: VOICE SPEED
+        - "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
+
+        PHASE 3: VISUAL KEYWORDS (Simple is Better)
+        - You must generate a search query for Pixabay Video.
+        - BAD: "Samurai warrior standing in rain cinematic" (Too complex).
+        - GOOD: "Samurai rain" (Perfect).
+        - GOOD: "Cyberpunk city" (Perfect).
         
-        [GENRES]
-        - "ambient" (Background, drone, deep)
-        - "cinematic" (Orchestral, movie scores)
-        - "electronic" (Modern, beats)
-        - "acoustic" (Soft, guitar, piano)
-        - "rock" (Energy, action)
-
-        [MOODS]
-        - "contemplative" (Thinking, sad, slow)
-        - "epic" (Battle, victory, fast)
-        - "happy" (Positive, bright)
-        - "suspense" (Dark, tension)
-        - "relaxing" (Calm, nature)
-
-        PHASE 2: VISUALS
-        - Create 1 Scene (15s) for atmosphere/action.
-        - Create 3-5 Scenes for lists/stories.
-        - KEYWORDS: Simple English subject (e.g., "Samurai rain").
+        STRUCTURE:
+        - 1 Scene (15s) if it's a mood/atmosphere.
+        - 3-5 Scenes if it's a list/tutorial.
 
         OUTPUT: Valid JSON only.
         """
@@ -62,8 +57,8 @@ def generate_script(topic: str) -> dict:
                 "audio_settings": {
                     "type": "OBJECT",
                     "properties": {
-                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock"]},
-                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing"]},
+                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]},
+                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]},
                         "voice_speed": {"type": "STRING"}
                     },
                     "required": ["pixabay_genre", "pixabay_mood", "voice_speed"]
@@ -92,7 +87,7 @@ def generate_script(topic: str) -> dict:
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=manual_schema,
-                temperature=0.5
+                temperature=0.5 
             )
         )
 

@@ -3,19 +3,17 @@ from io import BytesIO
 import requests
 import os
 
-# --- HEADERS UFFICIALI PER EVITARE BLOCCO CDN ---
+# --- HEADERS ANTI-HOTLINKING ---
+# La documentazione dice: "Download them to your server".
+# Pixabay controlla il Referer per bloccare l'hotlinking diretto.
 def get_browser_headers():
     return {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Referer": "https://pixabay.com/", # Fondamentale: Pixabay controlla che la richiesta arrivi 'dal suo sito'
-        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://pixabay.com/", 
         "Accept": "*/*"
     }
 
 def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voice_path=None, fps=30):
-    # (Logica XML standard - copia quella del messaggio precedente se serve, 
-    # l'importante è che scriva i path corretti Assets/Background_Music.mp3)
-    # ... PER BREVITÀ USO LA LOGICA STANDARD ...
     total_duration = sum(s['duration'] for s in scenes)
     width, height = (1080, 1920) if orientation == "portrait" else (1920, 1080)
 
@@ -79,43 +77,42 @@ def create_smart_package(scenes, orientation, music_url=None, voiceover_path=Non
                     r = requests.get(url, headers=get_browser_headers(), timeout=20)
                     if r.status_code == 200:
                         zf.writestr(f"Assets/{i+1:02d}_Clip.mp4", r.content)
-                except: pass # Gestione errori base
+                except Exception as e:
+                    zf.writestr(f"Assets/ERR_VID_{i+1}.txt", str(e))
 
-        # 2. MUSICA (L'INTERVENTO CHIRURGICO)
+        # 2. MUSICA (Con Headers corretti per Pixabay CDN)
         if music_url:
             try:
                 real_url = music_url[1] if isinstance(music_url, tuple) else music_url
-                print(f"⬇️ DOWNLOADING API MUSIC: {real_url}")
+                print(f"⬇️ DOWNLOAD AUDIO: {real_url}")
                 
-                # USIAMO HEADERS + STREAMING PER EVITARE MEMORY LEAK E BLOCCHI
-                # 'allow_redirects=True' segue se il CDN sposta il file
+                # allow_redirects=True è fondamentale
                 r = requests.get(real_url, headers=get_browser_headers(), timeout=30, allow_redirects=True, stream=True)
                 
                 if r.status_code == 200:
-                    # Leggiamo il contenuto (per file < 10MB è ok farlo in memoria)
-                    music_content = r.content
-                    if len(music_content) > 1000: # Controllo che non sia un file errore vuoto
-                        zf.writestr("Assets/Background_Music.mp3", music_content)
+                    music_data = r.content
+                    # Filtra file di errore vuoti o minuscoli
+                    if len(music_data) > 5000: 
+                        zf.writestr("Assets/Background_Music.mp3", music_data)
                         has_music = True
-                        print("✅ Musica scaricata da API Ufficiale.")
+                        print("✅ Audio salvato.")
                     else:
-                        print("❌ File troppo piccolo (probabile errore API).")
+                        zf.writestr("Assets/DEBUG_MUSIC_SMALL.txt", f"Size: {len(music_data)}")
                 else:
-                    # Debug file nello zip
-                    zf.writestr("Assets/API_ERROR.txt", f"HTTP {r.status_code} on {real_url}")
-                    print(f"❌ Errore HTTP {r.status_code}")
-
+                    zf.writestr("Assets/DEBUG_MUSIC_HTTP.txt", f"Code: {r.status_code}")
             except Exception as e:
-                zf.writestr("Assets/API_EXCEPTION.txt", str(e))
-                print(f"❌ Eccezione: {e}")
+                zf.writestr("Assets/DEBUG_MUSIC_EXC.txt", str(e))
 
         # 3. VOICEOVER
         if voiceover_path and os.path.exists(voiceover_path):
             with open(voiceover_path, "rb") as f: zf.writestr("Assets/Voiceover.mp3", f.read())
             has_voice = True
 
-        # 4. XML
-        xml = generate_davinci_xml("TubeFlow", scenes, orientation, "Assets/Background_Music.mp3" if has_music else None, "Assets/Voiceover.mp3" if has_voice else None)
+        # 4. XML & SCRIPT
+        m_path = "Assets/Background_Music.mp3" if has_music else None
+        v_path = "Assets/Voiceover.mp3" if has_voice else None
+        
+        xml = generate_davinci_xml("TubeFlow", scenes, orientation, m_path, v_path)
         zf.writestr(f"Project_{orientation}.fcpxml", xml)
         
         script = "\n".join([f"SCENE {s['scene_number']}: {s['voiceover']}" for s in scenes])
