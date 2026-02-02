@@ -3,73 +3,69 @@ import os
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
-# --- MODELLI DATI (PYDANTIC) ---
+# --- MODELLI DATI (SNELLITI: Niente più Music Settings) ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
     keyword: str
     duration: int
 
-class AudioSettings(BaseModel):
-    pixabay_genre: str  
-    pixabay_mood: str   
+class VoiceSettings(BaseModel):
     voice_speed: str
+    # Abbiamo rimosso Genre e Mood. Inutile calcolarli se non li usiamo.
 
 class VideoScript(BaseModel):
-    audio_settings: AudioSettings
+    voice_settings: VoiceSettings # Rinominato da audio_settings
     scenes: List[Scene]
 
-# --- FUNZIONE GENERAZIONE ---
-def generate_script(topic: str) -> dict:
+def generate_script(topic: str) -> Optional[dict]:
     
-    # Recupero API Key
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
         st.error("⚠️ API Key mancante.")
         return None
 
     try:
-        # Inizializzazione Client (Libreria Originale)
         client = genai.Client(api_key=api_key)
         
-        # PROMPT INGEGNERIZZATO (Logica Nuova)
+        # --- IL NUOVO PROMPT "TIKTOK STRATEGIST" ---
         system_instruction = """
-        You are a Video Director using the OFFICIAL Pixabay API.
+        You are a Viral Content Strategist for TikTok and Reels.
+        Your goal is to create a high-retention short video script.
+
+        PHASE 1: VISUAL KEYWORDS (The "Pexels Rule")
+        - You must generate search queries for Stock Footage.
+        - THE RULE: Keywords must be CONCRETE NOUNS. No abstract concepts.
+        - BAD: "Sadness and solitude" (Abstract -> No results).
+        - BAD: "Cinematic 4k detailed samurai" (Too long -> No results).
+        - GOOD: "Samurai rain" (Concrete).
+        - GOOD: "Lonely man sitting" (Concrete).
         
-        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
-        Select ONE Genre and ONE Mood from these lists:
-        [GENRES]: "ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"
-        [MOODS]: "contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"
+        PHASE 2: VOICE PACING
+        - Determine the voice speed based on the topic intensity.
+        - "-10%" for Sad/Deep/Philosophical/Horror.
+        - "+10%" for Facts/Curiosities/Hype/Motivation.
+        - "+0%" for Narrative/Storytelling.
 
-        PHASE 2: VOICE SPEED
-        - "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
+        PHASE 3: SCRIPTING
+        - Scene 1 MUST be a "Hook" (catch the attention in 3 seconds).
+        - Keep sentences short and punchy.
+        - Total duration: 30-60 seconds max.
 
-        PHASE 3: VISUAL KEYWORDS (Simple Rule)
-        - Generate a search query for Stock Video.
-        - BAD: "Samurai standing in rain cinematic" (Too complex).
-        - GOOD: "Samurai rain" (Perfect).
-        
-        STRUCTURE:
-        - 1 Scene (15s) for atmosphere.
-        - 3-5 Scenes for lists.
-
-        OUTPUT: JSON Object matching the schema.
+        OUTPUT: JSON Object only.
         """
         
-        # Schema JSON per la libreria google.genai
         manual_schema = {
             "type": "OBJECT",
             "properties": {
-                "audio_settings": {
+                "voice_settings": {
                     "type": "OBJECT",
                     "properties": {
-                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]},
-                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]},
                         "voice_speed": {"type": "STRING"}
                     },
-                    "required": ["pixabay_genre", "pixabay_mood", "voice_speed"]
+                    "required": ["voice_speed"]
                 },
                 "scenes": {
                     "type": "ARRAY",
@@ -85,10 +81,9 @@ def generate_script(topic: str) -> dict:
                     }
                 }
             },
-            "required": ["audio_settings", "scenes"]
+            "required": ["voice_settings", "scenes"]
         }
 
-        # Chiamata al Modello
         response = client.models.generate_content(
             model="gemini-flash-latest", 
             contents=f"TOPIC: {topic}",
@@ -104,11 +99,8 @@ def generate_script(topic: str) -> dict:
             st.error("AI Error: Risposta vuota.")
             return None
         
-        # Parsing Diretto
         return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
-        # Mostriamo l'errore esatto a schermo per debug
         st.error(f"AI Error: {str(e)}")
-        print(f"AI ERROR: {e}")
         return None

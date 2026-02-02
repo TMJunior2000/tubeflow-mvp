@@ -1,6 +1,7 @@
 import streamlit as st
+# Rimosso import get_pixabay_audio perché non serve più
 from modules.ai_engine import generate_script
-from modules.asset_manager import get_hybrid_video, get_pixabay_audio
+from modules.asset_manager import get_hybrid_video
 from modules.audio_engine import generate_voiceover_file
 from modules.exporter import create_smart_package
 
@@ -33,9 +34,9 @@ def main():
             voice_choice = st.selectbox("Language", ["🇮🇹 Italiano (Diego)", "🇺🇸 English (Christopher)"], label_visibility="collapsed")
             voice_id = "it-IT-DiegoNeural" if "Italiano" in voice_choice else "en-US-ChristopherNeural"
         
-        c3, c4 = st.columns(2)
-        with c3: use_voice = st.checkbox("🎙️ Generate Voice", True) 
-        with c4: use_music = st.checkbox("🎵 Auto-Match Music", True)
+        # Solo Voce, niente Musica
+        use_voice = st.checkbox("🎙️ Generate Voiceover", True) 
+        
         submit = st.form_submit_button("⚡ GENERATE MAGIC")
 
     if submit:
@@ -48,19 +49,14 @@ def main():
             # 1. AI SCRIPT
             st.write("🧠 AI Scripting...")
             script_data = generate_script(topic)
-            
-            # --- DEBUG: Se fallisce, ferma tutto e mostra l'errore ---
-            if not script_data:
-                status.update(label="❌ AI Error", state="error")
-                st.error("L'Intelligenza Artificiale ha fallito. Controlla: 1. API Key Google 2. Limiti quota.")
-                st.stop()
+            if not script_data: status.update(label="AI Error", state="error"); st.stop()
             
             scenes = script_data['scenes']
-            audio = script_data['audio_settings']
-            st.info(f"Mood: {audio['pixabay_genre']} / {audio['pixabay_mood']} | Voice: {audio['voice_speed']}")
+            audio = script_data['audio_settings'] # Usiamo ancora questo per la velocità voce
+            st.info(f"Detected Mood: {audio['pixabay_mood']} | Voice Speed: {audio['voice_speed']}")
 
-            # 2. VIDEO
-            st.write("🎥 Hunting Visuals...")
+            # 2. VIDEO HUNTING
+            st.write("🎥 Hunting Visuals (Pexels/Pixabay)...")
             final_scenes = []
             full_text = ""
             for s in scenes:
@@ -69,26 +65,19 @@ def main():
                 if vid: s.update(vid); s['video_link'] = vid['download']
                 final_scenes.append(s)
 
-            # 3. AUDIO
-            music_tuple = None
-            if use_music:
-                st.write("🎵 Finding Music...")
-                page, mp3 = get_pixabay_audio(audio['pixabay_genre'], audio['pixabay_mood'])
-                if mp3:
-                    music_tuple = (page, mp3)
-                    st.success("✅ Music Found!")
-                else:
-                    st.warning("⚠️ Music not found (Error: " + str(mp3) + ")")
+            # 3. AUDIO (RIMOSSO - NATIVE TIKTOK AUDIO STRATEGY)
+            # Saltiamo direttamente alla voce
 
             # 4. VOICE
             voice_path = None
             if use_voice:
-                st.write("🎙️ Recording...")
+                st.write("🎙️ Recording Voice...")
                 voice_path = generate_voiceover_file(full_text, voice_id, audio['voice_speed'])
 
             # 5. ZIP
-            st.write("📦 Downloading & Zipping...")
-            zip_data = create_smart_package(final_scenes, orientation, music_tuple, voice_path)
+            st.write("📦 Packaging...")
+            # Passiamo None come musica
+            zip_data = create_smart_package(final_scenes, orientation, music_data_tuple=None, voiceover_path=voice_path)
             
             st.session_state['generated_content'] = {
                 "scenes": final_scenes, "zip_data": zip_data, "file_name": f"TubeFlow_{orientation}.zip"
@@ -97,7 +86,7 @@ def main():
 
     if st.session_state['generated_content']:
         content = st.session_state['generated_content']
-        st.success("Project Ready!")
+        st.success("Project Ready! (Add Trending Audio in App)")
         for s in content['scenes']:
             with st.expander(f"Scene {s['scene_number']}: {s['keyword']} [{s.get('source', '?')}]"):
                 if s.get('preview'): st.video(s['preview'])
