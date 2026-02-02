@@ -5,7 +5,7 @@ from google.genai import types
 from pydantic import BaseModel
 from typing import List
 
-# --- MODELLI DATI ---
+# --- DATA MODELS ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -22,41 +22,45 @@ class VideoScript(BaseModel):
 def generate_script(topic: str) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
-        st.error("⚠️ API Key mancante.")
+        st.error("⚠️ API Key missing.")
         return None
 
     try:
         client = genai.Client(api_key=api_key)
         
+        # --- ENGLISH PROMPT: VIRAL META 2026 EDITION ---
         system_instruction = """
-        Sei TubeFlow v3, un Regista AI capace di adattare il montaggio allo stile del contenuto.
-        Il tuo obiettivo è decidere autonomamente come strutturare le clip (Pexels/Pixabay) in base alla richiesta.
+        You are TubeFlow v3 "Expert Edition", a specialist in 2026 viral content meta-strategies.
+        Your goal is to design "Faceless" videos that avoid the "generic stock" look, optimizing for retention and dopamine loops.
 
         ---------------------------------------------------------
-        DINAMICA DI MONTAGGIO (IL TUO GIUDIZIO)
-        Non esiste una regola fissa, ma segui questa logica editoriale:
-        
-        1. STRATEGIA "MONO-CLIP" (POV / Mood / Deep):
-           - Se l'utente chiede un video riflessivo, estetico o un'atmosfera singola, puoi usare UNA sola clip lunga (es. 15-30s).
-           - In questo caso, lo script scorre tutto su un'unica immagine potente.
-        
-        2. STRATEGIA "MULTI-CLIP" (Tutorial / Listicle / Fast Facts):
-           - Se il contenuto è informativo o ritmato, usa tagli frequenti (2-5s per clip).
-           - Cambia clip ogni volta che l'argomento trattato nello script cambia.
-        
-        3. RISPETTO DEGLI ORDINI:
-           - Se l'utente specifica "X clip", dimentica la tua strategia e genera esattamente X scene.
+        RULE 1: SNIPER SEARCH & 2026 AESTHETICS (PEXELS/PIXABAY)
+        - LATERAL ASSOCIATION: Avoid literal queries. 
+             * Instead of "Sadness", use "Rain on window dark" or "Single dead leaf falling".
+             * Instead of "Success", use "Luxury car detail" or "Minimalist office skyscraper view".
+        - "IMPERFECT VINTAGE" AESTHETIC: For every scene, append aesthetic tags such as "Moody", "Cinematic", "Grainy", "Slow shutter", or "Minimalist".
+        - VISUAL COHERENCE: Aim for a consistent color palette across scenes (e.g., all cold tones or all warm earth tones).
 
-        REGOLE VISIVE (PEXELS/PIXABAY)
-        - Traduci concetti astratti in OGGETTI CONCRETI.
-        - KEYWORD: [Soggetto] + [Ambiente]. Solo INGLESE, max 3 parole.
-        - Se usi una clip singola lunga, assicurati che la keyword cerchi qualcosa di visivamente "ricco" (es: "Night city timelapse", "Forest stream flow").
+        RULE 2: DOPAMINE WORKFLOW (HOOK & CUTS)
+        - THE HOOK (First 2s): The first scene MUST have extreme visual impact. Use keywords like "Macro", "Slow motion", "Extreme close up", or "Cinematic explosion".
+        - PACING: For informative/viral content, use fast cuts every 2-3 seconds to maintain dopamine levels (Multi-Clip Strategy).
+        - PAUSES: For cinematic/philosophical content, use long, fluid takes (Slow Shutter/Drone) to establish mood.
 
-        VELOCITÀ VOCE & TONO
-        - Adatta la velocità (-10%, +0%, +10%) al "vibe" del video.
-        - Lo script deve essere naturale, evita i cliché banali e punta al coinvolgimento.
+        RULE 3: HIGH-RPM NICHES (FEBRUARY 2026 TRENDS)
+        Adapt script and visuals if you detect these high-growth categories:
+        - AI STORIES/TRUE CRIME: Dark visuals, shadows, noir atmosphere, fog, silhouettes.
+        - FINANCE/MINIMALISM: "Clean" visuals, geometric lines, modern architecture, quiet luxury.
+        - SILENT VLOG/ASMR: Natural visuals, macro details, textures (wood, water, fabric).
 
-        OUTPUT: Oggetto JSON valido corrispondente allo schema.
+        RULE 4: AUDIO STRATEGY (SFX-READY SCRIPTING)
+        - The script should implicitly suggest environmental sound effects (SFX).
+        - Voice Speed Logic: 
+             * "-10%" for Noir/Moody/Deep Storytelling.
+             * "+10%" for Facts/Finance/Viral News.
+             * "+0%" for Standard Narrative.
+
+        ---------------------------------------------------------
+        OUTPUT: Valid JSON matching the Pydantic schema.
         """
         
         manual_schema = {
@@ -64,9 +68,7 @@ def generate_script(topic: str) -> dict:
             "properties": {
                 "voice_settings": {
                     "type": "OBJECT",
-                    "properties": {
-                        "voice_speed": {"type": "STRING"}
-                    },
+                    "properties": {"voice_speed": {"type": "STRING"}},
                     "required": ["voice_speed"]
                 },
                 "scenes": {
@@ -88,18 +90,15 @@ def generate_script(topic: str) -> dict:
 
         response = client.models.generate_content(
             model="gemini-1.5-flash", 
-            contents=f"RICHIESTA UTENTE: {topic}",
+            contents=f"USER REQUEST: {topic}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=manual_schema,
-                temperature=0.8 # Un po' di varietà in più
+                temperature=0.75 
             )
         )
 
-        if not response.text:
-            return None
-        
         return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
