@@ -161,18 +161,37 @@ def main():
         st.markdown("---")
         st.success("✅ Your project is ready!")
 
-        # Anteprima Scene
+        # --- OUTPUT CARDS ---
+        st.markdown("---")
+        st.success("✅ GENERATION COMPLETE")
+
+        # Anteprima Veloce
         for s in final_scenes:
             with st.expander(f"Scene {s['scene_number']}: {s['keyword']}"):
-                col_img, col_info = st.columns([1, 2])
-                with col_img:
-                    if s.get('preview'):
-                        st.image(s['preview'])
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    # FIX VISUALIZZAZIONE
+                    preview_url = s.get('preview')
+                    
+                    if preview_url:
+                        # Se il link finisce con .mp4 (Pexels/Pixabay video preview), usiamo st.video
+                        if ".mp4" in preview_url or ".webm" in preview_url:
+                            st.video(preview_url)
+                        else:
+                            # Altrimenti proviamo come immagine
+                            try:
+                                st.image(preview_url, use_container_width=True) # use_column_width è deprecato, usa questo
+                            except:
+                                st.warning("Anteprima non disponibile")
                     else:
-                        st.caption("No preview")
-                with col_info:
-                    st.caption(f"Source: {s.get('source')}")
-                    st.write(f"**Script:** {s['voiceover']}")
+                        st.info("Nessuna anteprima trovata")
+                        
+                with c2:
+                    st.caption(f"Source: {s.get('source', 'Unknown')}")
+                    st.markdown(f"**Script:** *{s['voiceover']}*")
+                    # Aggiungiamo un link cliccabile per sicurezza
+                    if s.get('video_link'):
+                        st.markdown(f"[🔗 Apri Video Originale]({s['video_link']})")
 
         # Bottone Download
         st.download_button(
