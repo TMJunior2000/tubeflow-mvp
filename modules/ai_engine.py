@@ -1,12 +1,11 @@
 import streamlit as st
 import os
-import json
-import google.generativeai as genai
-from google.ai.generativelanguage import Content, Part
+from google import genai
+from google.genai import types
 from pydantic import BaseModel
 from typing import List
 
-# --- MODELLI DATI ---
+# --- MODELLI DATI (PYDANTIC) ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -22,85 +21,94 @@ class VideoScript(BaseModel):
     audio_settings: AudioSettings
     scenes: List[Scene]
 
+# --- FUNZIONE GENERAZIONE ---
 def generate_script(topic: str) -> dict:
     
-    # 1. Recupero API KEY
+    # Recupero API Key
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
-        st.error("❌ ERRORE CRITICO: Google API Key non trovata nei secrets o environment.")
+        st.error("⚠️ API Key mancante.")
         return None
 
     try:
-        # 2. Configurazione Vecchia Scuola (Funziona Sempre)
-        genai.configure(api_key=api_key)
+        # Inizializzazione Client (Libreria Originale)
+        client = genai.Client(api_key=api_key)
         
-        # Configurazione Modello
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 8192,
-            "response_mime_type": "application/json",
-        }
-
-        model = genai.GenerativeModel(
-            model_name="gemini-flash-latest",
-            generation_config=generation_config,
-        )
-        
-        # 3. Prompt Ingegnerizzato
+        # PROMPT INGEGNERIZZATO (Logica Nuova)
         system_instruction = """
         You are a Video Director using the OFFICIAL Pixabay API.
-        Output MUST be a JSON object following this exact schema.
-
-        PHASE 1: AUDIO TAGGING
-        Select ONE Genre: ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]
-        Select ONE Mood: ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]
+        
+        PHASE 1: AUDIO TAGGING (Strictly Official Tags)
+        Select ONE Genre and ONE Mood from these lists:
+        [GENRES]: "ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"
+        [MOODS]: "contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"
 
         PHASE 2: VOICE SPEED
         - "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
 
-        PHASE 3: VISUAL KEYWORDS
-        - Search query for Stock Video. Simple English. 
-        - BAD: "Samurai standing in rain"
-        - GOOD: "Samurai rain"
+        PHASE 3: VISUAL KEYWORDS (Simple Rule)
+        - Generate a search query for Stock Video.
+        - BAD: "Samurai standing in rain cinematic" (Too complex).
+        - GOOD: "Samurai rain" (Perfect).
         
         STRUCTURE:
-        - 1 Scene for atmosphere.
+        - 1 Scene (15s) for atmosphere.
         - 3-5 Scenes for lists.
 
-        JSON SCHEMA:
-        {
-            "audio_settings": {
-                "pixabay_genre": "string",
-                "pixabay_mood": "string",
-                "voice_speed": "string"
-            },
-            "scenes": [
-                {
-                    "scene_number": int,
-                    "voiceover": "string",
-                    "keyword": "string",
-                    "duration": int
-                }
-            ]
-        }
+        OUTPUT: JSON Object matching the schema.
         """
         
-        # 4. Chiamata
-        full_prompt = f"{system_instruction}\n\nTOPIC: {topic}"
-        response = model.generate_content(full_prompt)
-        
+        # Schema JSON per la libreria google.genai
+        manual_schema = {
+            "type": "OBJECT",
+            "properties": {
+                "audio_settings": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "pixabay_genre": {"type": "STRING", "enum": ["ambient", "cinematic", "electronic", "acoustic", "rock", "lofi"]},
+                        "pixabay_mood": {"type": "STRING", "enum": ["contemplative", "epic", "happy", "suspense", "relaxing", "melancholic"]},
+                        "voice_speed": {"type": "STRING"}
+                    },
+                    "required": ["pixabay_genre", "pixabay_mood", "voice_speed"]
+                },
+                "scenes": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "scene_number": {"type": "INTEGER"},
+                            "voiceover": {"type": "STRING"},
+                            "keyword": {"type": "STRING"},
+                            "duration": {"type": "INTEGER"}
+                        },
+                        "required": ["scene_number", "voiceover", "keyword", "duration"]
+                    }
+                }
+            },
+            "required": ["audio_settings", "scenes"]
+        }
+
+        # Chiamata al Modello
+        response = client.models.generate_content(
+            model="gemini-flash-latest", 
+            contents=f"TOPIC: {topic}",
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                response_schema=manual_schema,
+                temperature=0.7
+            )
+        )
+
         if not response.text:
-            st.error("❌ Errore AI: Risposta vuota da Gemini.")
+            st.error("AI Error: Risposta vuota.")
             return None
         
-        # 5. Parsing JSON Manuale (Più robusto)
-        json_data = json.loads(response.text)
-        return VideoScript.model_validate(json_data).model_dump()
+        # Parsing Diretto
+        return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
-        # STAMPA L'ERRORE REALE A SCHERMO
-        st.error(f"❌ AI ENGINE ERROR: {str(e)}")
-        print(f"AI ERROR DETAILS: {e}")
+        # Mostriamo l'errore esatto a schermo per debug
+        st.error(f"AI Error: {str(e)}")
+        print(f"AI ERROR: {e}")
         return None
