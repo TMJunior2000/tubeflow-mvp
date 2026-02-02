@@ -174,23 +174,31 @@ def main():
                 
                 final_scenes.append(s)
 
-            # STEP 3: Audio Search (API Reale)
+            # --- 3. Audio Contextual (DEBUG VERSION) ---
             music_url = None
             voice_path = None
-
+            
             if use_music:
-                st.write(f"🎵 Searching Pixabay Audio: '{audio_settings['music_query']}'...")
-                # Chiama la nuova funzione get_contextual_music
-                music_res = get_contextual_music(audio_settings['music_query'])
-                if music_res:
-                    music_url = music_res[1] # Prende il link mp3
-                    st.write("✅ Music Track Found!")
-                else:
-                    st.warning("⚠️ Music not found (API Rate Limit?).")
-
+                st.markdown("---") # Separatore visivo
+                st.write(f"🎵 **DEBUG MUSICA:** Cerco '{audio_settings['music_query']}'...")
+                
+                # Chiamata all'Asset Manager
+                try:
+                    music_res = get_contextual_music(audio_settings['music_query'])
+                    
+                    if music_res and music_res[1]:
+                        music_url = music_res[1]
+                        st.success(f"✅ Trovato: `{music_url}`") # Mostra il link a schermo!
+                    else:
+                        st.error("❌ Asset Manager ha restituito None/Vuoto.")
+                        # FORZATURA DI EMERGENZA (Hardcoded Fallback)
+                        music_url = "https://cdn.pixabay.com/download/audio/2022/03/24/audio_1969a58943.mp3"
+                        st.warning(f"⚠️ Uso Link di Emergenza: `{music_url}`")
+                except Exception as e:
+                    st.error(f"❌ Errore Python durante la ricerca musica: {e}")
+            
             if use_voice:
                 st.write("🎙️ Synthesizing Neural Voice...")
-                # Passa la velocità decisa dall'IA (+10%, -10%, ecc.)
                 voice_path = generate_voiceover_file(full_text, voice_id, audio_settings['voice_speed'])
 
             # STEP 4: Packaging
