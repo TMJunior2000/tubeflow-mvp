@@ -3,211 +3,183 @@ import streamlit as st
 import random
 import os
 
-# --- CONFIGURAZIONE E UTILS ---
+# --- 1. CONFIGURAZIONE ---
 def get_api_keys():
-    """Recupera le chiavi API dai secrets di Streamlit o variabili d'ambiente."""
+    """Recupera le chiavi API (Admin Keys)"""
     pex = os.getenv("PEXELS_API_KEY") or st.secrets.get("PEXELS_API_KEY")
     pix = os.getenv("PIXABAY_API_KEY") or st.secrets.get("PIXABAY_API_KEY")
     return pex, pix
 
+# --- 2. MOTORE IBRIDO (IL CERVELLO) ---
 def get_hybrid_video(keyword: str, vibe: str, orientation: str):
     """
-    MOTORE DI RICERCA IBRIDO CON BREADCRUMB STRATEGY.
-    
-    1. Pulisce la keyword.
-    2. Crea le varianti (Breadcrumbs): "Lion Savanna Golden" -> "Lion Savanna" -> "Lion".
-    3. Per ogni variante, cerca su Pexels E Pixabay.
-    4. Restituisce il primo risultato utile con i metadati di precisione.
+    Cerca video usando la strategia 'Breadcrumb' (A cipolla).
+    Interroga Pexels e Pixabay con PARI IMPORTANZA.
     """
     pex_key, pix_key = get_api_keys()
     
-    # 1. Pulizia Keyword (Rimuoviamo istruzioni tecniche se presenti)
+    # Pulizia Keyword (Rimuoviamo comandi tecnici se l'IA li ha lasciati)
     base_keyword = keyword.replace("Vertical", "").replace("Portrait", "").replace("Landscape", "").strip()
     
-    # 2. Generazione Breadcrumbs (Le "Briciole di pane")
+    # Generazione Breadcrumbs (Le varianti di ricerca)
+    # Es: "Penguin Climbing Snow" -> ["Penguin Climbing Snow", "Penguin Climbing", "Penguin"]
     words = base_keyword.split()
     breadcrumbs = []
-    
-    # Crea varianti progressivamente più corte
-    # Es: ["Penguin Mountain Snow", "Penguin Mountain", "Penguin"]
     for i in range(len(words), 0, -1):
-        query_variant = " ".join(words[:i])
-        breadcrumbs.append(query_variant)
+        breadcrumbs.append(" ".join(words[:i]))
     
-    # Fallback per keyword vuote o singole
-    if not breadcrumbs: breadcrumbs = [base_keyword]
+    if not breadcrumbs: breadcrumbs = [base_keyword] # Fallback sicurezza
 
-    print(f"🔍 Breadcrumbs per '{keyword}': {breadcrumbs}")
+    print(f"🔍 Breadcrumbs Strategy: {breadcrumbs}")
 
-    # 3. Ciclo di Ricerca Competitivo
+    # --- CICLO DI RICERCA (Step by Step) ---
     for attempt, query in enumerate(breadcrumbs):
-        # Determina il tipo di match per la UI
-        is_last_attempt = (attempt == len(breadcrumbs) - 1) and len(breadcrumbs) > 1
         
+        # Definiamo la precisione del match per l'utente
+        is_last_attempt = (attempt == len(breadcrumbs) - 1) and len(breadcrumbs) > 1
         if attempt == 0:
-            match_type = "🟢 EXACT MATCH"
+            match_label = "🟢 EXACT MATCH"
         elif is_last_attempt:
-            match_type = "🟠 SUBJECT ONLY"
+            match_label = "🟠 SUBJECT ONLY"
         else:
-            match_type = "🟡 BROAD MATCH"
+            match_label = "🟡 BROAD MATCH"
 
-        # --- TENTATIVO PEXELS ---
-        if pex_key:
-            vid = _search_pexels(query, vibe, orientation, pex_key)
-            if vid:
-                return vid | {
-                    "match_type": match_type,
-                    "used_query": query,
-                    "source": "Pexels"
-                }
+        # Interroghiamo i due motori in parallelo
+        result_pexels = _search_pexels(query, vibe, orientation, pex_key) if pex_key else None
+        result_pixabay = _search_pixabay(query, vibe, orientation, pix_key) if pix_key else None
 
-        # --- TENTATIVO PIXABAY ---
-        if pix_key:
-            vid = _search_pixabay(query, vibe, orientation, pix_key)
-            if vid:
-                return vid | {
-                    "match_type": match_type,
-                    "used_query": query,
-                    "source": "Pixabay"
-                }
-    
-    # Se arriviamo qui, nessun motore ha trovato nulla (nemmeno con 1 parola)
-    return None
+        # --- LOGICA "EQUAL IMPORTANCE" (Spareggio) ---
+        if result_pexels and result_pixabay:
+            # Entrambi hanno trovato il video per questa query!
+            # Scegliamo a caso per dare varietà (50% Pexels, 50% Pixabay)
+            winner = random.choice([result_pexels, result_pixabay])
+            winner['match_type'] = match_label
+            winner['used_query'] = query
+            return winner
+        
+        # Se ne abbiamo trovato solo uno, vinci lui
+        if result_pexels:
+            result_pexels['match_type'] = match_label
+            result_pexels['used_query'] = query
+            return result_pexels
+            
+        if result_pixabay:
+            result_pixabay['match_type'] = match_label
+            result_pixabay['used_query'] = query
+            return result_pixabay
 
-# --- MOTORE PEXELS ---
+        # Se nessuno ha trovato nulla, il ciclo continua con la prossima "briciola" più corta...
+
+    return None # Nessun risultato nemmeno con 1 parola
+
+# --- 3. MOTORE PEXELS ---
 def _search_pexels(keyword, vibe, orientation, key):
     headers = {"Authorization": key}
     
-    # Mappatura Colori Intelligente (The "Vibe Hack")
-    # Pexels indicizza molto bene i colori predominanti.
+    # Color Mapping: Traduce lo stile in codici esadecimali per Pexels
     color_map = {
-        "Dark Cinematic": "000000", # Nero
-        "Luxury": "DAA520",         # Oro (GoldenRod)
-        "Tech": "0000FF",           # Blu
-        "Minimalist": "E6E6FA",     # Lavanda/Bianco
-        "Nature": "228B22",         # Verde foresta
-        "Fast Paced": ""            # Nessun colore specifico
+        "Dark Cinematic": "000000",
+        "Luxury": "DAA520",     # Oro
+        "Tech": "0000FF",       # Blu Elettrico
+        "Minimalist": "E6E6FA", # Bianco/Lavanda
+        "Nature": "228B22"      # Verde
     }
-    
-    # Se la vibe corrisponde a un colore, lo aggiungiamo
-    # Nota: Usiamo una corrispondenza parziale sulla stringa vibe
-    color_code = ""
-    for v_key, v_code in color_map.items():
-        if v_key in vibe:
-            color_code = v_code
-            break
-            
-    color_param = f"&color={color_code}" if color_code else ""
-    
-    # Costruzione URL Pexels
+    # Cerca se la vibe è nella mappa (es. "Dark" in "Dark Cinematic")
+    color_hex = next((v for k, v in color_map.items() if k in vibe), "")
+    color_param = f"&color={color_hex}" if color_hex else ""
+
     url = f"https://api.pexels.com/videos/search?query={keyword}&per_page=1&orientation={orientation}{color_param}"
     
     try:
-        r = requests.get(url, headers=headers, timeout=4)
+        r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
             data = r.json()
-            if data.get("videos") and len(data["videos"]) > 0:
+            if data.get("videos"):
                 vid = data["videos"][0]
                 
-                # Cerchiamo il link HD migliore (spesso 720p o 1080p)
-                # Fallback sul primo disponibile se non trova 'hd'
-                download_link = vid['video_files'][0]['link']
+                # Cerchiamo il file migliore (HD ma non 4K pesante, ideale 1080p o 720p)
+                # Pexels restituisce una lista 'video_files'. Cerchiamo quality='hd'.
+                best_link = vid['video_files'][0]['link'] # Default
                 for f in vid['video_files']:
-                    if f['quality'] == 'hd' and f['width'] >= 1080: # Preferiamo 1080p
-                        download_link = f['link']
+                    # Preferiamo HD con larghezza > 720 (quindi 1080p o 720p)
+                    if f['quality'] == 'hd' and f['width'] >= 720:
+                        best_link = f['link']
                         break
                 
                 return {
-                    "preview": vid['video_files'][0]['link'], # Solitamente buono per preview
-                    "download": download_link,
+                    "source": "Pexels",
                     "author": vid['user']['name'],
-                    "source_id": "Pexels"
+                    "preview": vid['video_files'][0]['link'], # Link leggero per preview
+                    "download": best_link, # Link alta qualità per download
+                    "video_link": vid['url'] # Link alla pagina originale
                 }
     except Exception as e:
         print(f"Pexels Error: {e}")
     return None
 
-# --- MOTORE PIXABAY ---
+# --- 4. MOTORE PIXABAY ---
 def _search_pixabay(keyword, vibe, orientation, key):
-    # Pixabay non ha filtri orientation/colori nativi per video avanzati,
-    # quindi li simuliamo aggiungendoli alla query testuale.
-    
+    # Pixabay API Video non ha il filtro 'orientation', lo simuliamo nel testo
     suffix = " vertical" if orientation == "portrait" else ""
     
-    # Aggiungiamo tag di atmosfera alla query se necessario
-    vibe_tag = ""
-    if "Dark" in vibe: vibe_tag = " dark"
-    elif "Luxury" in vibe: vibe_tag = " gold"
-    elif "Nature" in vibe: vibe_tag = " nature"
+    # Se la vibe è Dark, aiutiamo Pixabay aggiungendo 'dark' o 'night'
+    vibe_txt = " dark" if "Dark" in vibe else ""
     
-    # Query finale combinata
-    query = f"{keyword}{vibe_tag}{suffix}"
-    
-    # Endpoint Video Pixabay
+    query = f"{keyword}{vibe_txt}{suffix}"
     url = f"https://pixabay.com/api/videos/?key={key}&q={query}&video_type=film&per_page=3"
     
     try:
-        r = requests.get(url, timeout=4)
+        r = requests.get(url, timeout=5)
         if r.status_code == 200:
             data = r.json()
             if int(data.get("totalHits", 0)) > 0:
-                # Prendiamo il primo risultato
+                # Pixabay ordina per rilevanza, prendiamo il primo
                 vid = data["hits"][0]
                 
-                # Pixabay offre: tiny, small, medium, large
-                # 'medium' è di solito un buon compromesso (spesso 720p/1080p)
-                # 'tiny' è perfetto per la preview streamable
+                # Gestione Risoluzioni (tiny, small, medium, large)
+                # 'medium' è solitamente 720p/1080p. 'tiny' è per preview veloce.
+                preview_url = vid["videos"]["tiny"]["url"]
+                download_url = vid["videos"]["medium"]["url"]
                 
+                # Fallback se medium manca (raro)
+                if not download_url: download_url = vid["videos"]["small"]["url"]
+
                 return {
-                    "preview": vid["videos"]["tiny"]["url"],
-                    "download": vid["videos"]["medium"]["url"],
-                    "author": f"PixabayUser_{vid['user_id']}",
-                    "source_id": "Pixabay"
+                    "source": "Pixabay",
+                    "author": f"User {vid['user_id']}",
+                    "preview": preview_url,
+                    "download": download_url,
+                    "video_link": vid['pageURL']
                 }
     except Exception as e:
         print(f"Pixabay Error: {e}")
     return None
 
-# --- MOTORE AUDIO (PIXABAY MUSIC) ---
+# --- 5. MOTORE AUDIO ---
 def get_background_music(vibe: str):
-    """
-    Scarica una traccia audio MP3 da Pixabay basandosi sulla Vibe.
-    """
     _, pix_key = get_api_keys()
     if not pix_key: return None, None
     
-    # Mapping Vibe -> Tag Musicale Pixabay
-    tag = "ambient" # Default
-    if "Fast Paced" in vibe: tag = "upbeat"
-    elif "Dark" in vibe: tag = "cinematic horror"
-    elif "Luxury" in vibe: tag = "corporate"
-    elif "Minimalist" in vibe: tag = "chill"
-    elif "Tech" in vibe: tag = "electronic"
+    # Mapping Vibe -> Music Tags
+    tag = "ambient"
+    if "Fast Paced" in vibe: tag = "action"
+    elif "Dark" in vibe: tag = "horror"
+    elif "Luxury" in vibe: tag = "fashion"
+    elif "Tech" in vibe: tag = "science"
     
-    url = f"https://pixabay.com/api/?key={pix_key}&q={tag}&category=music&per_page=5"
+    url = f"https://pixabay.com/api/?key={pix_key}&q={tag}&category=music&per_page=3"
     
     try:
-        r = requests.get(url, timeout=4)
+        r = requests.get(url, timeout=5)
         if r.status_code == 200:
             data = r.json()
             if int(data.get("totalHits", 0)) > 0:
-                # Scegliamo a caso tra i primi 5 per varietà
                 track = random.choice(data["hits"])
-                # Pixabay Audio restituisce 'pageURL' per i credits
-                # e un link diretto che spesso è nel campo 'preview' o simile
-                # Nota: l'API audio di Pixabay è in beta e la struttura varia,
-                # ma spesso track['videos']['large']['url'] nei risultati audio è l'mp3
-                # Se non c'è, usiamo una logica di fallback o cerchiamo il campo giusto.
-                # Per ora assumiamo che la struttura JSON dei risultati audio sia simile ai video
-                # o che ci sia un campo audio diretto.
-                
-                # FIX COMUNE PIXABAY AUDIO:
-                # Spesso il file audio è sotto 'audio' o top level keys.
-                # In base all'analisi JSON standard:
-                # track["pageURL"] è la pagina
-                # track.get("previewURL") è spesso l'mp3 preview.
-                return track.get("pageURL"), track.get("previewURL") # previewURL è spesso l'mp3 completo per Pixabay
-    except Exception as e:
-        print(f"Audio Error: {e}")
-    
+                # L'API Music di Pixabay è in beta, il campo audio è spesso in 'videos'->'large' nei json sporchi
+                # o direttamente keys come 'audio'. Per sicurezza, controlliamo cosa c'è.
+                # Nota: Dai test recenti, Pixabay music a volte richiede scraping, 
+                # ma per ora usiamo il 'pageURL' che è sicuro.
+                # Se l'API restituisce un URL diretto mp3 (spesso 'previewURL' in docs vecchie), usalo.
+                return track.get("pageURL"), track.get("pageURL") 
+    except: pass
     return None, None
