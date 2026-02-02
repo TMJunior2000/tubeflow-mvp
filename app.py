@@ -5,7 +5,7 @@ import os
 from modules.ai_engine import generate_script
 from modules.asset_manager import get_hybrid_video, get_background_music
 from modules.audio_engine import generate_voiceover_file
-from modules.exporter import create_smart_package, generate_davinci_xml
+from modules.exporter import create_smart_package
 
 # Configurazione Pagina
 st.set_page_config(page_title="TubeFlow AI", page_icon="⚡", layout="centered")
@@ -14,22 +14,13 @@ st.set_page_config(page_title="TubeFlow AI", page_icon="⚡", layout="centered")
 if 'credits' not in st.session_state:
     st.session_state['credits'] = 3 # Start gratuito
 
-def check_credits():
-    return st.session_state['credits'] > 0
-
-def deduct_credit():
-    st.session_state['credits'] -= 1
-
-# --- CSS ORIGINALE (RESTORED) ---
+# --- CSS STYLES ---
 st.markdown("""
     <style>
-    /* SFONDO E RESET */
     .stApp {
         background-color: #050505;
         background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #050505 60%);
     }
-    
-    /* TITOLI */
     .hero-title {
         font-family: 'Inter', sans-serif;
         font-size: 3rem;
@@ -40,8 +31,6 @@ st.markdown("""
         text-align: center;
         margin-bottom: 0px;
     }
-    
-    /* CREDITI BADGE */
     .credit-badge {
         text-align: center;
         font-family: monospace;
@@ -53,8 +42,6 @@ st.markdown("""
         margin: 10px auto 30px auto;
         width: fit-content;
     }
-
-    /* FORM STYLE */
     div[data-testid="stForm"] {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -62,8 +49,6 @@ st.markdown("""
         padding: 2rem;
         backdrop-filter: blur(10px);
     }
-    
-    /* BOTTONE */
     .stButton > button {
         background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
         color: #000;
@@ -74,9 +59,6 @@ st.markdown("""
         font-size: 1.1rem;
         width: 100%;
     }
-    .stButton > button:hover {
-        box-shadow: 0 0 20px rgba(0, 201, 255, 0.5);
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -84,9 +66,15 @@ def main():
     # --- HERO SECTION ---
     st.markdown('<div class="hero-title">TUBEFLOW AI</div>', unsafe_allow_html=True)
     
-    # Crediti Display
-    credits = st.session_state['credits']
-    st.markdown(f'<div class="credit-badge">⚡ CREDITS AVAILABLE: {credits}</div>', unsafe_allow_html=True)
+    # 1. PLACEHOLDER PER I CREDITI (Così possiamo aggiornarlo senza rerun)
+    credit_placeholder = st.empty()
+    
+    # Funzione per renderizzare il badge
+    def show_credits():
+        val = st.session_state['credits']
+        credit_placeholder.markdown(f'<div class="credit-badge">⚡ CREDITS AVAILABLE: {val}</div>', unsafe_allow_html=True)
+    
+    show_credits() # Mostra stato iniziale
 
     # --- INPUT FORM ---
     with st.form("creator_form"):
@@ -102,47 +90,38 @@ def main():
             use_voice = st.checkbox("Generate Voiceover", value=False)
             use_music = st.checkbox("Add Background Music", value=False)
             
-            # Voce (condizionale, solo visuale per ora)
             if use_voice:
                 voice_id = st.selectbox("Voice", ["en-US-ChristopherNeural", "it-IT-DiegoNeural"], label_visibility="collapsed")
             else:
-                voice_id = None # Non usato
+                voice_id = None
 
         submit = st.form_submit_button("⚡ GENERATE PLAN")
 
     # --- LOGICA DI GENERAZIONE ---
     if submit:
+        # VALIDAZIONI
         if not topic:
             st.warning("⚠️ Please enter a topic.")
-            return
+            st.stop()
 
-        if not check_credits():
+        if st.session_state['credits'] <= 0:
             st.error("❌ Out of credits! Please upgrade to Pro.")
-            st.info("💡 Demo: Refresh the page to reset credits (simulated).")
-            return
+            st.stop()
 
-        # Deduce Credito
-        deduct_credit()
-        st.rerun() # Ricarica per aggiornare il contatore visivo (trucco Streamlit)
+        # DEDUZIONE CREDITO E UPDATE UI IMMEDIATO
+        st.session_state['credits'] -= 1
+        show_credits() # Aggiorna il numero visivamente ORA
 
-    # --- RISULTATI (Fuori dal form per persistere dopo il rerun) ---
-    # Nota: In un'app reale useremmo session_state per persistere i dati generati
-    # Qui simuliamo che l'utente abbia appena premuto o i dati siano salvati.
-    # Per semplicità in questo esempio, metto la logica diretta (ma il rerun sopra resettarebbe,
-    # quindi rimuoviamo il rerun sopra per questa demo o gestiamo lo state completo).
-    # MODIFICA DEMO: Tolgo il rerun e aggiorno il badge manualmente col testo.
-    
-    if submit and topic and check_credits(): # Rimosso deduct per demo
-        # Aggiornamento UI manuale
-        st.session_state['credits'] -= 1 
-        
-        with st.status("🔮 Magic in progress...", expanded=True):
+        # ESECUZIONE WORKFLOW
+        with st.status("🔮 Magic in progress...", expanded=True) as status:
+            
             # 1. AI Script
             st.write("🧠 Designing Script...")
-            scenes = generate_script(topic, vibe) # Niente API Key utente!
+            scenes = generate_script(topic, vibe)
             
             if not scenes:
-                st.error("AI Error.")
+                status.update(label="❌ AI Error. Credits refunded.", state="error")
+                st.session_state['credits'] += 1 # Rimborso se fallisce
                 st.stop()
 
             # 2. Asset Hunt
@@ -158,6 +137,7 @@ def main():
                     s['source'] = vid['source']
                 else:
                     s['video_link'] = None
+                    s['source'] = "Not Found"
                 final_scenes.append(s)
 
             # 3. Optionals
@@ -174,22 +154,27 @@ def main():
 
             st.write("📦 Packaging...")
             zip_data = create_smart_package(final_scenes, music_url, voice_path)
+            
+            status.update(label="✅ GENERATION COMPLETE", state="complete")
 
-        # --- OUTPUT CARDS ---
+        # --- OUTPUT DISPLAY ---
         st.markdown("---")
-        st.success("✅ GENERATION COMPLETE")
+        st.success("✅ Your project is ready!")
 
-        # Anteprima Veloce
+        # Anteprima Scene
         for s in final_scenes:
             with st.expander(f"Scene {s['scene_number']}: {s['keyword']}"):
-                c1, c2 = st.columns([1, 2])
-                with c1:
-                    if s.get('preview'): st.image(s['preview'])
-                with c2:
+                col_img, col_info = st.columns([1, 2])
+                with col_img:
+                    if s.get('preview'):
+                        st.image(s['preview'])
+                    else:
+                        st.caption("No preview")
+                with col_info:
                     st.caption(f"Source: {s.get('source')}")
-                    st.write(f"Script: *{s['voiceover']}*")
+                    st.write(f"**Script:** {s['voiceover']}")
 
-        # Download Bottone
+        # Bottone Download
         st.download_button(
             label=f"⬇️ DOWNLOAD PACK ({len(zip_data)/1024/1024:.1f} MB)",
             data=zip_data,
