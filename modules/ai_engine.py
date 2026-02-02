@@ -22,85 +22,50 @@ class VideoScript(BaseModel):
 def generate_script(topic: str) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
-        st.error("⚠️ API Key missing.")
+        st.error("⚠️ API Key missing in Secrets.")
         return None
 
     try:
-        client = genai.Client(api_key=api_key)
+        # Client configurato per la serie Gemini 3 (v1alpha)
+        client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
         
-        # --- ENGLISH PROMPT: VIRAL META 2026 EDITION ---
         system_instruction = """
-        You are TubeFlow v3 "Expert Edition", a specialist in 2026 viral content meta-strategies.
-        Your goal is to design "Faceless" videos that avoid the "generic stock" look, optimizing for retention and dopamine loops.
+        You are TubeFlow v3 "Expert Edition", a specialist in 2026 viral content.
+        Your mission is to translate user requests into high-retention Faceless videos.
 
-        ---------------------------------------------------------
-        RULE 1: SNIPER SEARCH & 2026 AESTHETICS (PEXELS/PIXABAY)
-        - LATERAL ASSOCIATION: Avoid literal queries. 
-             * Instead of "Sadness", use "Rain on window dark" or "Single dead leaf falling".
-             * Instead of "Success", use "Luxury car detail" or "Minimalist office skyscraper view".
-        - "IMPERFECT VINTAGE" AESTHETIC: For every scene, append aesthetic tags such as "Moody", "Cinematic", "Grainy", "Slow shutter", or "Minimalist".
-        - VISUAL COHERENCE: Aim for a consistent color palette across scenes (e.g., all cold tones or all warm earth tones).
+        STRATEGY 2026:
+        1. SNIPER SEARCH: Convert abstract feelings into CONCRETE objects for Pexels/Pixabay. 
+           (e.g., "Loneliness" -> "Empty street night moody", "Wealth" -> "Minimalist gold watch detail").
+        2. VINTAGE AESTHETIC: Always add tags like "Moody", "Cinematic", "Grainy", or "Slow shutter" to keywords.
+        3. DOPAMINE PACING: Use fast cuts (2-3s) for facts, and long "POV" takes (10s+) for atmospheres.
+        4. HOOK FIRST: The first scene must be a "Visual Hook" (Macro, Extreme Close-up).
 
-        RULE 2: DOPAMINE WORKFLOW (HOOK & CUTS)
-        - THE HOOK (First 2s): The first scene MUST have extreme visual impact. Use keywords like "Macro", "Slow motion", "Extreme close up", or "Cinematic explosion".
-        - PACING: For informative/viral content, use fast cuts every 2-3 seconds to maintain dopamine levels (Multi-Clip Strategy).
-        - PAUSES: For cinematic/philosophical content, use long, fluid takes (Slow Shutter/Drone) to establish mood.
-
-        RULE 3: HIGH-RPM NICHES (FEBRUARY 2026 TRENDS)
-        Adapt script and visuals if you detect these high-growth categories:
-        - AI STORIES/TRUE CRIME: Dark visuals, shadows, noir atmosphere, fog, silhouettes.
-        - FINANCE/MINIMALISM: "Clean" visuals, geometric lines, modern architecture, quiet luxury.
-        - SILENT VLOG/ASMR: Natural visuals, macro details, textures (wood, water, fabric).
-
-        RULE 4: AUDIO STRATEGY (SFX-READY SCRIPTING)
-        - The script should implicitly suggest environmental sound effects (SFX).
-        - Voice Speed Logic: 
-             * "-10%" for Noir/Moody/Deep Storytelling.
-             * "+10%" for Facts/Finance/Viral News.
-             * "+0%" for Standard Narrative.
-
-        ---------------------------------------------------------
-        OUTPUT: Valid JSON matching the Pydantic schema.
+        ADAPTABILITY:
+        - If the user specifies "X clips", obey strictly.
+        - If no number is specified, decide the best storytelling rhythm.
         """
-        
-        manual_schema = {
-            "type": "OBJECT",
-            "properties": {
-                "voice_settings": {
-                    "type": "OBJECT",
-                    "properties": {"voice_speed": {"type": "STRING"}},
-                    "required": ["voice_speed"]
-                },
-                "scenes": {
-                    "type": "ARRAY",
-                    "items": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "scene_number": {"type": "INTEGER"},
-                            "voiceover": {"type": "STRING"},
-                            "keyword": {"type": "STRING"},
-                            "duration": {"type": "INTEGER"}
-                        },
-                        "required": ["scene_number", "voiceover", "keyword", "duration"]
-                    }
-                }
-            },
-            "required": ["voice_settings", "scenes"]
-        }
 
+        # Chiamata al modello Gemini 3 Flash
         response = client.models.generate_content(
-            model="gemini-flash-latest", 
+            model="gemini-3-flash-preview", 
             contents=f"USER REQUEST: {topic}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
+                # Livello di pensiero "low" per massimizzare la velocità e minimizzare i costi
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
                 response_mime_type="application/json",
-                response_schema=manual_schema,
-                temperature=0.75 
+                temperature=1.0 # Valore ottimale per Gemini 3
             )
         )
 
+        if not response.text:
+            return None
+        
         return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
-        st.error(f"AI Error: {str(e)}")
+        if "429" in str(e):
+            st.error("🚫 QUOTA EXCEEDED (20 RPD). Please create a NEW Google Project or wait 24h.")
+        else:
+            st.error(f"AI Engine Error: {str(e)}")
         return None
