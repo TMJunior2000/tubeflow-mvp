@@ -2,171 +2,122 @@ import zipfile
 from io import BytesIO
 import requests
 import os
-import streamlit as st
 
-def get_request_headers():
-    """Si traveste da Browser per evitare blocchi 403 da Pexels/Pixabay"""
+# --- INGANNO BROWSER (Anti-Blocco 403) ---
+def get_headers():
     return {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Referer": "https://www.google.com/"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://pixabay.com/",
+        "Accept": "*/*"
     }
 
 def generate_davinci_xml(project_name, scenes, orientation, music_path=None, voice_path=None, fps=30):
-    """
-    Genera FCPXML 1.8 includendo Video, Musica e Voiceover.
-    """
+    # (Questa parte XML non cambia, serve solo per FCPXML)
     total_duration = sum(s['duration'] for s in scenes)
-    
-    # Setup Risoluzione
-    if orientation == "portrait":
-        width, height = 1080, 1920
-    else:
-        width, height = 1920, 1080
+    width, height = (1080, 1920) if orientation == "portrait" else (1920, 1080)
 
-    # Header XML
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE fcpxml>
 <fcpxml version="1.8">
     <resources>
         <format id="r1" name="FFVideoFormat{height}p{fps}" frameDuration="1/{fps}s" width="{width}" height="{height}" colorSpace="1-1-1 (Rec. 709)"/>
 """
-    # --- 1. DEFINIZIONE RISORSE (ASSETS) ---
-    resource_id_counter = 2
+    r_id = 2
+    music_rid = f"r{r_id}" if music_path else None
+    if music_path: 
+        xml += f'        <asset id="{music_rid}" name="Music" src="./Assets/Background_Music.mp3" start="0s" duration="{total_duration}s" hasVideo="0" hasAudio="1" audioSources="1" audioChannels="2" />\n'; r_id+=1
     
-    music_res_id = None
-    if music_path:
-        music_res_id = f"r{resource_id_counter}"
-        xml += f'        <asset id="{music_res_id}" name="Background_Music" src="./Assets/Background_Music.mp3" start="0s" duration="{total_duration}s" hasVideo="0" hasAudio="1" audioSources="1" audioChannels="2" />\n'
-        resource_id_counter += 1
+    voice_rid = f"r{r_id}" if voice_path else None
+    if voice_path: 
+        xml += f'        <asset id="{voice_rid}" name="Voice" src="./Assets/Voiceover.mp3" start="0s" duration="{total_duration}s" hasVideo="0" hasAudio="1" audioSources="1" audioChannels="1" />\n'; r_id+=1
 
-    voice_res_id = None
-    if voice_path:
-        voice_res_id = f"r{resource_id_counter}"
-        xml += f'        <asset id="{voice_res_id}" name="Voiceover" src="./Assets/Voiceover.mp3" start="0s" duration="{total_duration}s" hasVideo="0" hasAudio="1" audioSources="1" audioChannels="1" />\n'
-        resource_id_counter += 1
-
-    xml += """    </resources>
+    xml += f"""    </resources>
     <library>
         <event name="{project_name}">
             <project name="{project_name}">
                 <sequence format="r1" duration="{total_duration}s" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
                     <spine>
 """
-    
-    # --- 2. TRACCIA VIDEO (SPINE) ---
     offset = 0
     for i, scene in enumerate(scenes):
-        safe_keyword = "".join(c for c in scene['keyword'] if c.isalnum() or c in (' ', '_')).replace(' ', '_')
-        filename = f"{i+1:02d}_{safe_keyword}.mp4"
+        clean_name = f"{i+1:02d}_Clip.mp4"
         dur = scene['duration']
-        
-        xml += f"""
-                        <clip name="{filename}" offset="{offset}s" duration="{dur}s" start="0s">
+        xml += f"""                        <clip name="{clean_name}" offset="{offset}s" duration="{dur}s" start="0s">
                             <note>{scene['voiceover']}</note>
-                            <video offset="0s" ref="r1" duration="{dur}s" start="0s"/>
-"""
-        # --- 3. AGGANCIO AUDIO (CONNECTED CLIPS) ---
+                            <video offset="0s" ref="r1" duration="{dur}s" start="0s"/>"""
+        
         if i == 0:
-            # Voiceover (Priorità alta)
-            if voice_res_id:
-                xml += f"""
-                            <clip name="Voiceover" lane="-1" offset="0s" ref="{voice_res_id}" duration="{total_duration}s" start="0s">
-                                <audio offset="0s" ref="{voice_res_id}" duration="{total_duration}s" start="0s" role="dialogue"/>
-                            </clip>"""
-            
-            # Musica (Priorità bassa, lane -2)
-            if music_res_id:
-                xml += f"""
-                            <clip name="Music" lane="-2" offset="0s" ref="{music_res_id}" duration="{total_duration}s" start="0s">
-                                <audio offset="0s" ref="{music_res_id}" duration="{total_duration}s" start="0s" role="music"/>
-                            </clip>"""
-
-        xml += "                        </clip>"
+            if voice_rid: xml += f'<clip lane="-1" offset="0s" ref="{voice_rid}" duration="{total_duration}s" start="0s"><audio role="dialogue"/></clip>'
+            if music_rid: xml += f'<clip lane="-2" offset="0s" ref="{music_rid}" duration="{total_duration}s" start="0s"><audio role="music"/></clip>'
+        
+        xml += "                        </clip>\n"
         offset += dur
 
-    xml += """
-                    </spine>
+    xml += """                    </spine>
                 </sequence>
             </project>
         </event>
     </library>
 </fcpxml>"""
-    
     return xml
 
 def create_smart_package(scenes, orientation, music_url=None, voiceover_path=None):
-    """
-    Crea ZIP robusto con gestione errori e User-Agent.
-    """
     zip_buffer = BytesIO()
 
-    # Variabili di stato
-    final_music_path = None
-    final_voice_path = None
+    # Variabili per XML
+    has_music = False
+    has_voice = False
 
-    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
         
-        # --- 1. VIDEO ASSETS ---
+        # 1. SCARICA VIDEO
         for i, scene in enumerate(scenes):
-            # FIX CRUCIALE: Cerca sia 'video_link' (app.py) che 'download' (asset_manager)
-            download_link = scene.get('video_link') or scene.get('download')
-            
-            if download_link:
+            url = scene.get('video_link') or scene.get('download')
+            if url:
                 try:
-                    # SCARICAMENTO CON HEADERS (Anti-Blocco)
-                    response = requests.get(download_link, headers=get_request_headers(), timeout=30, stream=True)
-                    
-                    if response.status_code == 200:
-                        safe_key = "".join(c for c in scene['keyword'] if c.isalnum() or c in (' ','_')).replace(' ','_')
-                        filename = f"Assets/{i+1:02d}_{safe_key}.mp4"
-                        zip_file.writestr(filename, response.content)
-                        print(f"✅ Video {i+1} scaricato.")
+                    r = requests.get(url, headers=get_headers(), timeout=20)
+                    if r.status_code == 200:
+                        safe_name = f"Assets/{i+1:02d}_Clip.mp4"
+                        zf.writestr(safe_name, r.content)
                     else:
-                        print(f"❌ Errore Video {i+1}: Status {response.status_code}")
-                        zip_file.writestr(f"Assets/ERROR_VIDEO_{i+1}_STATUS_{response.status_code}.txt", download_link)
+                        zf.writestr(f"Assets/ERR_VID_{i+1}.txt", f"Status: {r.status_code}")
                 except Exception as e:
-                    print(f"❌ Eccezione Video {i+1}: {e}")
-                    zip_file.writestr(f"Assets/ERROR_VIDEO_{i+1}.txt", str(e))
-            else:
-                zip_file.writestr(f"Assets/MISSING_LINK_{i+1}.txt", "Nessun link trovato nel JSON")
+                    zf.writestr(f"Assets/ERR_VID_{i+1}.txt", str(e))
 
-        # --- 2. MUSIC ASSET ---
+        # 2. SCARICA MUSICA (CRITICO)
         if music_url:
             try:
                 # Gestione tupla/stringa
                 real_url = music_url[1] if isinstance(music_url, tuple) else music_url
                 
-                if real_url:
-                    m_resp = requests.get(real_url, headers=get_request_headers(), timeout=30)
-                    if m_resp.status_code == 200:
-                        zip_file.writestr("Assets/Background_Music.mp3", m_resp.content)
-                        final_music_path = "Assets/Background_Music.mp3"
-                        print("✅ Musica scaricata.")
-                    else:
-                        print(f"❌ Errore Musica: {m_resp.status_code}")
+                print(f"⬇️ DOWNLOAD MUSICA: {real_url}")
+                
+                # HEADERS FONDAMENTALI QUI
+                r = requests.get(real_url, headers=get_headers(), timeout=30, allow_redirects=True)
+                
+                if r.status_code == 200 and len(r.content) > 1000: # Check se il file non è vuoto
+                    zf.writestr("Assets/Background_Music.mp3", r.content)
+                    has_music = True
+                    print("✅ Musica SALVATA nello ZIP")
+                else:
+                    err = f"Errore HTTP {r.status_code} - Len: {len(r.content)}"
+                    zf.writestr("Assets/DEBUG_MUSIC_ERROR.txt", f"URL: {real_url}\nERR: {err}")
+                    print(f"❌ {err}")
             except Exception as e:
-                print(f"❌ Eccezione Musica: {e}")
+                zf.writestr("Assets/DEBUG_MUSIC_EXCEPTION.txt", str(e))
+                print(f"❌ Exception: {e}")
 
-        # --- 3. VOICEOVER ASSET ---
+        # 3. VOICEOVER
         if voiceover_path and os.path.exists(voiceover_path):
             with open(voiceover_path, "rb") as f:
-                content = f.read()
-                zip_file.writestr("Assets/Voiceover.mp3", content)
-                final_voice_path = "Assets/Voiceover.mp3"
-                print("✅ Voiceover archiviato.")
+                zf.writestr("Assets/Voiceover.mp3", f.read())
+            has_voice = True
 
-        # --- 4. XML ---
-        xml_content = generate_davinci_xml(
-            "TubeFlow_Project", 
-            scenes, 
-            orientation, 
-            music_path=final_music_path, 
-            voice_path=final_voice_path
-        )
-        zip_file.writestr(f"Project_{orientation}.fcpxml", xml_content)
-
-        # 5. Script
-        script_text = "\n".join([f"SCENE {s['scene_number']} ({s['keyword']}): {s['voiceover']}" for s in scenes])
-        zip_file.writestr("Script.txt", script_text)
+        # 4. XML & SCRIPT
+        xml = generate_davinci_xml("TubeFlow", scenes, orientation, "Assets/Background_Music.mp3" if has_music else None, "Assets/Voiceover.mp3" if has_voice else None)
+        zf.writestr(f"Project_{orientation}.fcpxml", xml)
+        
+        script = "\n".join([f"SCENE {s['scene_number']}: {s['voiceover']}" for s in scenes])
+        zf.writestr("Script.txt", script)
 
     return zip_buffer.getvalue()

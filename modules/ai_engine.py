@@ -3,9 +3,8 @@ import os
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
-# --- MODELLI DATI ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -13,17 +12,15 @@ class Scene(BaseModel):
     duration: int
 
 class AudioSettings(BaseModel):
-    # Mapping rigoroso dei parametri Pixabay
-    pixabay_genre: str  # Es: "ambient", "cinematic", "lofi"
-    pixabay_mood: str   # Es: "contemplative", "melancholic", "epic"
-    voice_speed: str    # Es: "+10%", "-5%"
+    pixabay_genre: str
+    pixabay_mood: str
+    voice_speed: str
 
 class VideoScript(BaseModel):
     audio_settings: AudioSettings
     scenes: List[Scene]
 
-def generate_script(topic: str) -> Optional[dict]:
-    
+def generate_script(topic: str) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
     if not api_key: return None
 
@@ -31,39 +28,25 @@ def generate_script(topic: str) -> Optional[dict]:
         client = genai.Client(api_key=api_key)
         
         system_instruction = """
-        You are a Director. Create a video plan.
+        You are a TikTok Video Director.
 
-        ---------------------------------------------------------
-        PHASE 1: PIXABAY MUSIC MAPPING (STRICT)
-        ---------------------------------------------------------
-        You MUST select the audio attributes from these exact lists based on the topic:
+        PHASE 1: AUDIO (Pixabay Strict)
+        - GENRE: Choose ONE ["ambient", "cinematic", "lofi", "acoustic"]
+        - MOOD: Choose ONE ["contemplative", "melancholic", "dreamy", "epic", "suspense"]
+        - SPEED: "-10%" (Sad/Deep), "+15%" (Hype), "+0%" (Normal)
 
-        1. GENRE (Pick ONE):
-           - "ambient" (For voiceovers, deep thoughts)
-           - "cinematic" (For epic nature, mountains, drones)
-           - "lofi" (For urban, chill, modern)
-           - "acoustic" (For happy, bright)
+        PHASE 2: VISUALS (The "Lobotomy" Rule)
+        - KEYWORDS MUST BE STUPID SIMPLE. 2-3 WORDS MAX.
+        - BAD: "Samurai warrior solitary under heavy rain cinematic" (Too long, returns 0 results).
+        - GOOD: "Samurai rain" (Perfect).
+        - GOOD: "Katana" (Perfect).
+        - NEVER use adjectives like "cinematic", "4k", "detailed". Just the SUBJECT.
 
-        2. MOOD (Pick ONE):
-           - "contemplative" (Thinking, philosophy, pensive)
-           - "melancholic" (Sad, lonely, rain)
-           - "dreamy" (Beautiful nature, soft)
-           - "epic" (Victory, mountains, power)
-           - "suspense" (Tension, mystery)
-        
-        3. VOICE SPEED:
-           - "-10%" (Serious/Sad)
-           - "+15%" (Hype/Action)
-           - "+0%" (Neutral)
+        PHASE 3: STRUCTURE
+        - If Atmosphere -> 1 Scene (15s).
+        - If List -> 3-5 Scenes.
 
-        ---------------------------------------------------------
-        PHASE 2: VISUALS (One-Shot Rule)
-        ---------------------------------------------------------
-        - If Atmosphere/Action -> 1 Scene (15s).
-        - If List/Story -> 3-5 Scenes.
-        - KEYWORDS: [Subject] + [Context]. English Only.
-
-        OUTPUT: Valid JSON only.
+        OUTPUT: JSON only.
         """
         
         manual_schema = {
@@ -110,5 +93,4 @@ def generate_script(topic: str) -> Optional[dict]:
         return VideoScript.model_validate_json(response.text).model_dump()
 
     except Exception as e:
-        print(f"AI Error: {e}")
         return None
