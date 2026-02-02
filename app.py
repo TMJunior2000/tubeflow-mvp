@@ -35,30 +35,44 @@ def main():
     # --- INPUT FORM ---
     with st.form("creator_form"):
         st.markdown("**1. VIDEO CONCEPT**")
-        topic = st.text_area("What is the video about?", height=80, placeholder="Ex. The future of AI in 2030...")
+        # Placeholder educativo come discusso
+        topic = st.text_area(
+            "Di cosa parla il video?", 
+            height=80, 
+            placeholder="Esempio: Una giornata tipica di un pinguino in Antartide (Meglio di: 'Pinguino che salta')"
+        )
         
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**2. STYLE**")
-            vibe = st.selectbox("Vibe", ["Fast Paced", "Dark Cinematic", "Luxury", "Minimalist"], label_visibility="collapsed")
+            vibe = st.selectbox("Vibe", ["Fast Paced", "Dark Cinematic", "Luxury", "Minimalist", "Nature Documentary"], label_visibility="collapsed")
         with c2:
             st.markdown("**3. FORMAT**")
-            # SELETTORE FORMATO OBBLIGATORIO
             format_choice = st.radio("Ratio", ["9:16 (TikTok/Reels)", "16:9 (YouTube)"], label_visibility="collapsed")
-            # Mappiamo la scelta a stringhe tecniche
             orientation = "portrait" if "9:16" in format_choice else "landscape"
 
-        st.markdown("**4. OPTIONS**")
+        st.markdown("---")
+        st.markdown("**4. AUDIO & LINGUA**")
+        
+        # --- FIX: LOGICA VOCE SEMPRE VISIBILE ---
         c3, c4 = st.columns(2)
         with c3:
-            use_voice = st.checkbox("Generate Voiceover", value=False)
-        with c4:
-            use_music = st.checkbox("Add Background Music", value=False)
+            # Checkbox per attivare/disattivare
+            use_voice = st.checkbox("🎙️ Generate Voiceover", value=True) 
+            use_music = st.checkbox("🎵 Add Background Music", value=False)
             
-        if use_voice:
-            voice_id = st.selectbox("Voice", ["en-US-ChristopherNeural", "it-IT-DiegoNeural"], label_visibility="collapsed")
-        else:
-            voice_id = None
+        with c4:
+            # Il menu DEVE essere visibile SUBITO per permetterti di scegliere ITA
+            # Usiamo un dizionario per avere etichette belle ma ID tecnici
+            voice_options = {
+                "🇮🇹 Italiano (Diego)": "it-IT-DiegoNeural",
+                "🇺🇸 English (Christopher)": "en-US-ChristopherNeural"
+            }
+            selected_label = st.selectbox("Lingua Voiceover", list(voice_options.keys()), label_visibility="collapsed")
+            voice_id = voice_options[selected_label]
+
+        # Disclaimer UI
+        st.caption("ℹ️ *Se 'Generate Voiceover' non è spuntato, la lingua selezionata verrà ignorata.*")
 
         submit = st.form_submit_button("⚡ GENERATE PLAN")
 
