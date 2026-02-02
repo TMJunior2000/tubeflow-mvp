@@ -89,7 +89,7 @@ def generate_script(topic: str) -> dict:
         }
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash", 
+            model="gemini-flash-latest", 
             contents=f"USER REQUEST: {topic}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
