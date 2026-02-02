@@ -30,20 +30,34 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
         
         # PROMPT "SNIPER PROTOCOL" (Mantenuto perché performante)
         system_instruction = """
-        You are an expert TikTok/Reels Video Director.
-        Create a high-retention plan with 3-5 scenes based on the user topic.
+                You are a Stock Footage Curator Algorithm.
+                Your goal is to generate search tags that PERFECTLY MATCH Pexels/Pixabay indexing logic.
 
-        STRICT SEARCH RULES:
-        1. 'voiceover': Engaging, direct. Max 2 sentences.
-        2. 'keyword': A STRING of 2-4 concrete visual tags. 
-           - MUST include a visual noun and action.
-           - Format: "[Subject] [Action] Vertical"
-           - Example: "Business man running city Vertical"
-        3. 'duration': 3-5 seconds.
-        4. Total length: 15-30s.
+                CRITICAL TAGGING RULES:
+                1. HIERARCHY (Subject + Location):
+                - NEVER search for complex actions (e.g., "Climbing"). Search for the Context.
+                - BAD: "Penguin looking at sea" -> GOOD: "Penguin Beach"
+                - BAD: "Man working hard" -> GOOD: "Man Office" or "Typing"
 
-        OUTPUT: Valid JSON only matching the schema.
-        """
+                2. AESTHETICS & LIGHT (The "Vibe" Hack):
+                - Stock engines index LIGHT better than EMOTION.
+                - Instead of "Sadness", use: "Rain Window", "Dark Room", "Shadow".
+                - Instead of "Success", use: "Mountain Top", "Sunlight", "Golden Hour".
+                - Instead of "Tech", use: "Blue Light", "Neon", "Server Room".
+
+                3. SAFE KEYWORDS (The Jokers):
+                - Time passing -> "Timelapse", "Clouds moving".
+                - Thinking/Mind -> "Forest fog", "Ocean waves".
+                - Business -> "Office", "Glass Building", "Handshake".
+
+                4. FORMATTING:
+                - Keyword MUST be a string of 2-3 words max.
+                - Format: [Noun/Subject] [Environment] [Lighting/Vibe]
+                - Example: "Lion Savanna Golden"
+                - ENGLISH ONLY. NO "Vertical" (system handles it).
+
+                OUTPUT: Valid JSON only matching the schema.
+                """
         
         user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}"
 
