@@ -51,7 +51,7 @@ def _search_pexels(keyword, vibe, key):
 
 def _search_pixabay(keyword, vibe, key):
     # Aggiungiamo 'vertical' alla query perché il filtro API a volte fallisce
-    query = f"{keyword} vertical"
+    query = keyword
     url = f"https://pixabay.com/api/videos/?key={key}&q={query}&video_type=film&per_page=3"
     
     try:

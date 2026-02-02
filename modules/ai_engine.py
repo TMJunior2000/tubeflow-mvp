@@ -4,7 +4,7 @@ from google.genai import types
 from pydantic import BaseModel
 from typing import List
 
-# Modelli Pydantic per validazione
+# --- STRUTTURA DATI ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -16,8 +16,7 @@ class VideoScript(BaseModel):
 
 def generate_script(topic: str, vibe: str, api_key: str) -> List[dict]:
     """
-    Genera uno script video strutturato usando Google Gemini.
-    Richiede API Key utente (BYOK).
+    Genera script ottimizzato con il 'Sniper Protocol' per asset stock precisi.
     """
     if not api_key:
         st.error("⚠️ API Key mancante. Inseriscila nella sidebar.")
@@ -26,22 +25,28 @@ def generate_script(topic: str, vibe: str, api_key: str) -> List[dict]:
     try:
         client = genai.Client(api_key=api_key)
         
-        # Prompt ottimizzato per Social Video
+        # --- QUI INSERIAMO IL TUO PROMPT "SNIPER PROTOCOL" ---
         system_instruction = """
-        You are an expert Video Director for TikTok/Reels.
-        Create a fast-paced plan (3-5 scenes). Total length: 15-30 seconds.
-        
-        RULES:
-        1. 'voiceover': Direct, engaging, max 2 short sentences per scene.
-        2. 'keyword': Visual search term (English noun + adjective). E.g. "Cyberpunk city", "Happy dog".
-        3. 'duration': 3 to 6 seconds per scene.
-        
-        OUTPUT: Valid JSON only matching the schema.
+        You are an expert TikTok/Reels Video Director specialized in stock footage curation.
+        Create a high-retention, fast-paced plan with 3-5 scenes based on the user topic.
+
+        STRICT SEARCH RULES (The "Sniper Protocol"):
+        1. 'voiceover': Engaging, direct, ready for TTS. Max 2 sentences.
+        2. 'keyword': A STRING of 2-4 concrete visual tags separated by spaces. 
+           - MUST include a visual noun (Subject) and an action/context.
+           - AVOID abstract concepts (e.g., DO NOT use "Success", USE "Man in suit shaking hands").
+           - MANDATORY: Append "Vertical" or "Portrait" to every keyword string to match TikTok format.
+           - Format: "[Subject] [Action/Adjective] [Setting] Vertical"
+           - Example: "Business meeting shaking hands office Vertical"
+        3. 'duration': 3-6 seconds.
+        4. Total length: 15-30s.
+
+        OUTPUT: Valid JSON only matching the requested schema.
         """
         
         user_prompt = f"TOPIC: {topic}\nVIBE: {vibe}"
 
-        # Schema JSON "Low Level" per compatibilità Gemini 1.5
+        # Schema JSON manuale (Fix per compatibilità Gemini 1.5)
         manual_schema = {
             "type": "OBJECT",
             "properties": {
@@ -77,10 +82,11 @@ def generate_script(topic: str, vibe: str, api_key: str) -> List[dict]:
         if not response.text:
             return []
 
-        # Parsing
+        # Parsing e Validazione
         script_obj = VideoScript.model_validate_json(response.text)
         return [scene.model_dump() for scene in script_obj.scenes]
 
     except Exception as e:
-        st.error(f"Errore AI: {str(e)}")
+        print(f"🔥 AI Error: {e}")
+        st.error(f"Errore generazione script: {str(e)}")
         return []
