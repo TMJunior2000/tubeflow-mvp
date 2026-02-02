@@ -17,10 +17,6 @@ class VideoScript(BaseModel):
 
 # --- FUNZIONE PRINCIPALE ---
 def generate_script(topic: str, vibe: str) -> List[dict]:
-    """
-    Genera lo script usando Gemini 1.5 Flash.
-    Include logica ADATTIVA (1 vs 5 clip) e COERENZA VISIVA.
-    """
     
     # Recupera API Key
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -31,46 +27,43 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
     try:
         client = genai.Client(api_key=api_key)
         
-        # --- IL PROMPT DEFINITIVO (Director Mode) ---
+        # --- IL NUOVO PROMPT "ONE-SHOT SUPREMACY" ---
         system_instruction = """
-        You are an elite Stock Footage Curator and Video Director.
-        Your goal is to translate a User Topic into a sequence of search queries for Pexels/Pixabay.
+        You are a Stock Footage Curator.
+        Your goal is to find the BEST video assets.
 
         ---------------------------------------------------------
-        STEP 1: ANALYZE INTENT (Adaptive Structure)
+        CORE LOGIC: THE "ONE-SHOT" RULE
         ---------------------------------------------------------
-        Decide the best structure based on the topic complexity:
+        Videos on social media perform better if they are continuous.
+        
+        👉 DEFAULT BEHAVIOR (Priority 1):
+        If the user describes a visual action or atmosphere (e.g., "Penguin climbing mountain", "Sunset at beach", "Man working"), you MUST generate ONLY 1 SCENE.
+        - Scenes: 1 (One)
+        - Duration: 15 to 20 seconds.
+        - Keyword: The exact broad subject (e.g., "Penguin walking snow").
+        - Goal: Let the user see the full clip without interruptions.
 
-        👉 MODE A: "THE MOMENT" (Specific Action/Vibe)
-           - Trigger: User asks for a single specific action (e.g., "Penguin climbing mountain", "Rain on window").
-           - Output: 1 or 2 Scenes MAX.
-           - Duration: 10 to 15 seconds per scene (Long takes to show the action).
-           - Strategy: Find the exact visual match.
+        👉 EXCEPTION BEHAVIOR (Priority 2):
+        Only switch to Multi-Scene mode if the user explicitly asks for a LIST, a STEP-BY-STEP guide, or contrasting concepts.
+        - Example: "3 tips for..." -> 3 Scenes.
+        - Example: "Summer vs Winter" -> 2 Scenes.
+        - Example: "Past, Present, Future" -> 3 Scenes.
+        
+        ---------------------------------------------------------
+        TAGGING RULES (Critical for Pexels/Pixabay)
+        ---------------------------------------------------------
+        1. MAIN SUBJECT ALWAYS: Every keyword MUST start with the main subject.
+           - User: "Penguin climbing mountain"
+           - BAD Keywords: "Mountain peak", "Snow", "Ice" (Subject is missing!)
+           - GOOD Keyword: "Penguin walking snow" (Subject is present).
+           
+        2. SIMPLIFY ACTIONS:
+           - Stock sites do not have "Climbing Mt Everest". They have "Walking in snow".
+           - Always downgrade complex verbs to simple states (Walk, Run, Sit, Look).
 
-        👉 MODE B: "THE STORY" (Narrative/List)
-           - Trigger: User asks for a concept, tips, or a story (e.g., "3 tips for success", "History of Rome").
-           - Output: 3 to 5 Scenes.
-           - Duration: 3 to 5 seconds per scene (Fast paced cuts).
-           - Strategy: Use visual metaphors to tell the story.
-
-        ---------------------------------------------------------
-        STEP 2: VISUAL CONSISTENCY (The "Anti-Frankenstein" Rule)
-        ---------------------------------------------------------
-        - CRITICAL: You must pick ONE visual setting/theme and stick to it for the whole video.
-        - BAD: Scene 1 (Desert) -> Scene 2 (Snow) -> Scene 3 (Office).
-        - GOOD: Scene 1 (Snowy mountain bottom) -> Scene 2 (Snowy cliff) -> Scene 3 (Snowy peak).
-        - EXCEPTION: Only switch environments if the script explicitly compares them (e.g., "Summer vs Winter").
-
-        ---------------------------------------------------------
-        STEP 3: SEARCH TAG OPTIMIZATION (The Pexels Protocol)
-        ---------------------------------------------------------
-        1. FORMULA: Use [Subject] + [Context] + [Lighting/Action].
-        2. SIMPLICITY: Stock engines are dumb. 
-           - Don't use: "Overcoming adversity" (Abstract) -> Use: "Hiker mountain top" (Physical).
-           - Don't use: "Penguin struggling to climb" -> Use: "Penguin walking snow" (Findable).
         3. ENGLISH ONLY.
-        4. NO TECHNICAL SPECS: Do not write "Vertical", "4k", or "Real" in keywords.
-
+        
         OUTPUT: Valid JSON only matching the schema.
         """
         
@@ -104,7 +97,7 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=manual_schema,
-                temperature=0.7 
+                temperature=0.5 # Abbassato temperatura per essere più rigoroso
             )
         )
 
@@ -114,5 +107,5 @@ def generate_script(topic: str, vibe: str) -> List[dict]:
         return [scene.model_dump() for scene in script_obj.scenes]
 
     except Exception as e:
-        print(f"AI Error: {e}") # Log in console per debug
+        print(f"AI Error: {e}") 
         return []
