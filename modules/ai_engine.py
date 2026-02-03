@@ -77,7 +77,7 @@ def generate_script(topic: str) -> dict:
                 contents=f"TOPIC: {topic}. REQUIREMENT: 7 scenes, ALWAYS repeat the subject '{topic.split()[0]}' in keywords.",
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    thinking_config=types.ThinkingConfig(thinking_level="low"),
+                    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
                     temperature=0.7, # Abbassato per maggiore rigore
                     response_mime_type="application/json",
                     response_schema=target_schema 
