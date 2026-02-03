@@ -7,7 +7,6 @@ from google.genai import types
 from pydantic import BaseModel
 from typing import List
 
-# --- DATA MODELS ---
 class Scene(BaseModel):
     scene_number: int
     voiceover: str
@@ -23,20 +22,12 @@ class VideoScript(BaseModel):
 
 def generate_script(topic: str) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
-    if not api_key:
-        st.error("⚠️ API Key missing.")
-        return None
-
     client = genai.Client(http_options={'api_version': 'v1alpha'}, api_key=api_key)
     
     target_schema = {
         "type": "OBJECT",
         "properties": {
-            "voice_settings": {
-                "type": "OBJECT",
-                "properties": { "voice_speed": {"type": "STRING"} },
-                "required": ["voice_speed"]
-            },
+            "voice_settings": {"type": "OBJECT", "properties": {"voice_speed": {"type": "STRING"}}, "required": ["voice_speed"]},
             "scenes": {
                 "type": "ARRAY",
                 "items": {
@@ -54,37 +45,49 @@ def generate_script(topic: str) -> dict:
         "required": ["voice_settings", "scenes"]
     }
 
-    # --- IL NUOVO PROMPT BASATO SULLA MATRICE DI TAG ---
-    system_instruction = """You are the AI assistant for Pexels and Pixabay users. The user provides a text or an idea for a video they want to create. 
-        Your task is to leverage your deep knowledge of Pexels and Pixabay video tags to identify the most relevant clips for their request. 
-        Based on the user's intent, you must determine the appropriate number of video clips (one or more) and the specific duration for each scene.
-        MANDATORY: Return ONLY a valid JSON object that matches the provided schema."""
+    # --- PROMPT BLINDATO "SUBJECT ANCHOR" ---
+    system_instruction = """
+    You are TubeFlow v3. Goal: Absolute Visual Precision.
 
-    # Retry Logic
+    --- RULE 1: THE "ANCHOR" SUBJECT ---
+    - **CRITICAL:** The FIRST word of every keyword MUST be the Main Subject.
+    - **REPETITION:** Repeat the subject in every query to avoid ambiguity.
+    - **BAD:** "Chick hatching" (Finds chickens), "Swimming" (Finds fish).
+    - **GOOD:** "Penguin chick hatching", "Penguin swimming underwater".
+    - **NEVER** use ambiguous words alone (e.g. use "Baby Penguin", never just "Chick").
+
+    --- RULE 2: VISUAL PROGRESSION ---
+    - Tell a story: Scene 1 (Subject Close-up) -> Scene 2 (Subject Action) -> Scene 3 (Subject Environment).
+    - Vary the action, but keep the Anchor Subject fixed.
+
+    --- RULE 3: TECHNICAL SPECS ---
+    - Duration: INTEGER (2-4s).
+    - Audio Speed: String with sign (e.g. "+10%").
+    - Keywords: English, max 3-4 words. format: [Subject] + [Action] + [Aesthetic].
+
+    MANDATORY: Return ONLY valid JSON.
+    """
+
     max_retries = 3
     attempt = 0
     while attempt < max_retries:
         try:
             response = client.models.generate_content(
                 model="gemini-3-flash-preview", 
-                contents=f"TOPIC: {topic}. REQUIREMENT: 7 scenes, structured tags (Subject+Action+Env+Style), fast cuts.",
+                contents=f"TOPIC: {topic}. REQUIREMENT: 7 scenes, ALWAYS repeat the subject '{topic.split()[0]}' in keywords.",
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-                    temperature=1.0, # Alta creatività per variare i soggetti
+                    thinking_config=types.ThinkingConfig(thinking_level="low"),
+                    temperature=0.7, # Abbassato per maggiore rigore
                     response_mime_type="application/json",
                     response_schema=target_schema 
                 )
             )
-            
             raw_data = json.loads(response.text)
             if isinstance(raw_data, list): raw_data = raw_data[0]
             return VideoScript.model_validate(raw_data).model_dump()
-
         except Exception as e:
-            if "503" in str(e):
-                attempt += 1; time.sleep(2)
-                continue
+            if "503" in str(e): attempt += 1; time.sleep(2); continue
             st.error(f"AI Error: {str(e)}")
             return None
     return None
