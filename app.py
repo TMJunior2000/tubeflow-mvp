@@ -20,7 +20,6 @@ st.markdown("""
 
 def main():
     st.markdown('<div class="hero-title">TUBEFLOW AI</div>', unsafe_allow_html=True)
-    # RIMOSSO BADGE CREDITI
 
     with st.form("creator_form"):
         topic = st.text_area("VIDEO CONCEPT", height=80, placeholder="Es. Samurai sotto la pioggia...")
@@ -37,14 +36,13 @@ def main():
         submit = st.form_submit_button("⚡ GENERATE MAGIC")
 
     if submit:
-        # RIMOSSO CHECK CREDITI E RATE LIMIT
         if not topic: st.warning("Topic Missing!"); st.stop()
         
         st.session_state['generated_content'] = None
 
         with st.status("🔮 AI Director is working...", expanded=True) as status:
             
-            # 1. AI SCRIPT (Con Auto-Retry integrato)
+            # 1. AI SCRIPT
             st.write("🧠 AI Scripting...")
             script_data = generate_script(topic)
             
@@ -58,18 +56,28 @@ def main():
             
             st.info(f"Voice Speed: {voice_speed} | Scenes: {len(scenes)}")
 
-            # 2. VIDEO HUNTING
+            # 2. VIDEO HUNTING (CON DEDUPLICAZIONE)
             st.write("🎥 Hunting Visuals (Pexels/Pixabay)...")
             final_scenes = []
             full_text = ""
+            
+            # --- LISTA NERA PER EVITARE DOPPIONI ---
+            used_links = [] 
+
             for s in scenes:
                 full_text += s['voiceover'] + " "
-                vid = get_hybrid_video(s['keyword'], "", orientation)
+                
+                # Passiamo la lista dei link già usati
+                vid = get_hybrid_video(s['keyword'], orientation, excluded_urls=used_links)
+                
                 if vid: 
                     s.update(vid)
                     s['video_link'] = vid['download']
+                    # Aggiungiamo il nuovo link alla lista nera
+                    used_links.append(vid['download'])
                 else:
                     s['video_link'] = None 
+                    
                 final_scenes.append(s)
 
             # 3. VOICE
